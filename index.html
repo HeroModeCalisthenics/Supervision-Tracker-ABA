@@ -13,7 +13,17 @@
           <p class="eyebrow">Fieldwork Flow</p>
           <h1>Supervision tracker</h1>
         </div>
-        <button class="icon-button" id="printSummaryBtn" title="Print monthly summary" aria-label="Print monthly summary">P</button>
+        <div class="account-panel">
+          <form id="authForm" class="auth-form">
+            <input type="email" id="authEmail" placeholder="Email" autocomplete="email" />
+            <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" />
+            <button type="button" class="secondary-action" id="signInBtn">Sign in</button>
+            <button type="button" class="ghost-action" id="signUpBtn">Sign up</button>
+          </form>
+          <div class="auth-status" id="authStatus">Local only</div>
+          <button class="ghost-action hidden" id="signOutBtn">Sign out</button>
+          <button class="icon-button" id="printSummaryBtn" title="Print monthly summary" aria-label="Print monthly summary">P</button>
+        </div>
       </header>
 
       <main>
@@ -271,6 +281,8 @@
       </section>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

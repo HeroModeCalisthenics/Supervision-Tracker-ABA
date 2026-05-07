@@ -52,7 +52,9 @@ button {
 .hero-panel,
 .sticky-actions,
 .filters,
-.export-actions {
+.export-actions,
+.account-panel,
+.auth-form {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -61,6 +63,36 @@ button {
 
 .topbar {
   padding: 12px 0 18px;
+}
+
+.account-panel {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.auth-form {
+  gap: 8px;
+}
+
+.auth-form input {
+  width: 160px;
+  min-height: 40px;
+  padding: 9px 10px;
+}
+
+.auth-form button,
+.account-panel > button {
+  min-height: 40px;
+}
+
+.auth-status {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.hidden {
+  display: none !important;
 }
 
 h1,
@@ -565,9 +597,16 @@ dialog::backdrop {
 
   .hero-panel,
   .section-heading,
-  .filters {
+  .filters,
+  .topbar,
+  .account-panel,
+  .auth-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .auth-form input {
+    width: 100%;
   }
 
   .tabs {

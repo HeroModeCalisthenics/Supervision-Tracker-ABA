@@ -1,4 +1,10 @@
 const STORAGE_KEY = "fieldwork-flow-state-v1";
+const CLOUD_PROFILE_DEFAULTS = {
+  weeklyGoal: 20,
+  unrestrictedTarget: 60,
+  supervisionTarget: 5,
+  defaultSetting: "Clinic"
+};
 
 const activityTypes = [
   { name: "Direct Therapy", category: "Restricted", experience: "Independent", clientPresent: true, badge: "Restricted", prompt: "Implemented acquisition targets and behavior support plan." },
@@ -16,6 +22,12 @@ const activityTypes = [
 
 const state = loadState();
 let selectedActivity = activityTypes[0].name;
+let cloud = {
+  client: null,
+  user: null,
+  enabled: false,
+  loading: false
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,6 +52,254 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function cloudConfig() {
+  return window.FIELDWORK_FLOW_CONFIG || {};
+}
+
+function configureSupabase() {
+  const config = cloudConfig();
+  if (!window.supabase || !config.supabaseUrl || !config.supabaseAnonKey) {
+    updateAuthUi();
+    return;
+  }
+  cloud.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  cloud.enabled = true;
+}
+
+async function initSupabase() {
+  configureSupabase();
+  if (!cloud.enabled) return;
+  const { data, error } = await cloud.client.auth.getSession();
+  if (error) {
+    setAuthStatus(`Auth error: ${error.message}`);
+    return;
+  }
+  cloud.user = data.session?.user || null;
+  updateAuthUi();
+  if (cloud.user) await loadCloudState();
+  cloud.client.auth.onAuthStateChange(async (_event, session) => {
+    cloud.user = session?.user || null;
+    updateAuthUi();
+    if (cloud.user) await loadCloudState();
+  });
+}
+
+function setAuthStatus(message) {
+  $("authStatus").textContent = message;
+}
+
+function updateAuthUi() {
+  const signedIn = !!cloud.user;
+  $("authForm").classList.toggle("hidden", signedIn);
+  $("signOutBtn").classList.toggle("hidden", !signedIn);
+  if (!cloud.enabled) {
+    setAuthStatus("Local only");
+  } else if (signedIn) {
+    setAuthStatus(`Cloud sync: ${cloud.user.email}`);
+  } else {
+    setAuthStatus("Sign in for cloud sync");
+  }
+}
+
+async function signIn() {
+  if (!cloud.enabled) return alert("Supabase is not configured.");
+  const email = $("authEmail").value.trim();
+  const password = $("authPassword").value;
+  if (!email || !password) return alert("Enter email and password.");
+  const { error } = await cloud.client.auth.signInWithPassword({ email, password });
+  if (error) alert(error.message);
+}
+
+async function signUp() {
+  if (!cloud.enabled) return alert("Supabase is not configured.");
+  const email = $("authEmail").value.trim();
+  const password = $("authPassword").value;
+  if (!email || !password) return alert("Enter email and password.");
+  const { error } = await cloud.client.auth.signUp({ email, password });
+  if (error) {
+    alert(error.message);
+  } else {
+    alert("Account created. If Supabase asks for email confirmation, confirm it, then sign in.");
+  }
+}
+
+async function signOut() {
+  if (!cloud.enabled) return;
+  await cloud.client.auth.signOut();
+  cloud.user = null;
+  updateAuthUi();
+}
+
+async function loadCloudState() {
+  if (!cloud.user || cloud.loading) return;
+  cloud.loading = true;
+  setAuthStatus("Loading cloud data...");
+  try {
+    const [profileResult, settingsResult, supervisorsResult, entriesResult] = await Promise.all([
+      cloud.client.from("profiles").select("*").eq("id", cloud.user.id).maybeSingle(),
+      cloud.client.from("settings").select("*").eq("user_id", cloud.user.id).maybeSingle(),
+      cloud.client.from("supervisors").select("*").order("created_at", { ascending: true }),
+      cloud.client.from("fieldwork_entries").select("*").order("date", { ascending: false }).order("start_time", { ascending: false })
+    ]);
+    throwIfSupabaseError(profileResult.error);
+    throwIfSupabaseError(settingsResult.error);
+    throwIfSupabaseError(supervisorsResult.error);
+    throwIfSupabaseError(entriesResult.error);
+
+    const profile = profileResult.data;
+    const settings = settingsResult.data;
+    state.profile = {
+      name: profile?.name || "",
+      email: profile?.email || cloud.user.email || "",
+      weeklyGoal: Number(settings?.weekly_hour_goal ?? CLOUD_PROFILE_DEFAULTS.weeklyGoal),
+      unrestrictedTarget: Number(settings?.unrestricted_target_percentage ?? CLOUD_PROFILE_DEFAULTS.unrestrictedTarget),
+      supervisionTarget: Number(settings?.supervision_target_percentage ?? CLOUD_PROFILE_DEFAULTS.supervisionTarget),
+      defaultSetting: settings?.default_setting || CLOUD_PROFILE_DEFAULTS.defaultSetting
+    };
+    state.supervisors = supervisorsResult.data.map(fromCloudSupervisor);
+    state.entries = entriesResult.data.map(fromCloudEntry);
+    await ensureCloudProfile();
+    if (!state.supervisors.length) {
+      await createDefaultCloudSupervisor();
+    }
+    saveState();
+    renderAll();
+    updateAuthUi();
+  } catch (error) {
+    setAuthStatus(`Sync error: ${error.message}`);
+  } finally {
+    cloud.loading = false;
+  }
+}
+
+function throwIfSupabaseError(error) {
+  if (error) throw error;
+}
+
+async function ensureCloudProfile() {
+  if (!cloud.user) return;
+  const profilePayload = {
+    id: cloud.user.id,
+    email: state.profile.email || cloud.user.email || "",
+    name: state.profile.name || ""
+  };
+  const settingsPayload = {
+    user_id: cloud.user.id,
+    weekly_hour_goal: Number(state.profile.weeklyGoal || CLOUD_PROFILE_DEFAULTS.weeklyGoal),
+    unrestricted_target_percentage: Number(state.profile.unrestrictedTarget || CLOUD_PROFILE_DEFAULTS.unrestrictedTarget),
+    supervision_target_percentage: Number(state.profile.supervisionTarget || CLOUD_PROFILE_DEFAULTS.supervisionTarget),
+    default_setting: state.profile.defaultSetting || CLOUD_PROFILE_DEFAULTS.defaultSetting
+  };
+  const profileResult = await cloud.client.from("profiles").upsert(profilePayload);
+  throwIfSupabaseError(profileResult.error);
+  const settingsResult = await cloud.client.from("settings").upsert(settingsPayload, { onConflict: "user_id" });
+  throwIfSupabaseError(settingsResult.error);
+}
+
+async function createDefaultCloudSupervisor() {
+  const fallback = { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", email: "", organization: "", active: true };
+  const saved = await saveCloudSupervisor(fallback);
+  state.supervisors = [saved || fallback];
+  saveState();
+  renderAll();
+}
+
+async function saveCloudEntry(entry) {
+  if (!cloud.user) return;
+  const result = await cloud.client.from("fieldwork_entries").upsert(toCloudEntry(entry));
+  throwIfSupabaseError(result.error);
+}
+
+async function saveCloudSupervisor(supervisor) {
+  if (!cloud.user) return null;
+  const result = await cloud.client.from("supervisors").upsert(toCloudSupervisor(supervisor)).select("*").single();
+  throwIfSupabaseError(result.error);
+  return fromCloudSupervisor(result.data);
+}
+
+async function deleteCloudSupervisor(id) {
+  if (!cloud.user) return;
+  const result = await cloud.client.from("supervisors").delete().eq("id", id);
+  throwIfSupabaseError(result.error);
+}
+
+async function saveCloudSettings() {
+  if (!cloud.user) return;
+  await ensureCloudProfile();
+}
+
+function toCloudEntry(entry) {
+  return {
+    id: entry.id,
+    user_id: cloud.user.id,
+    date: entry.date,
+    start_time: entry.startTime,
+    end_time: entry.endTime,
+    duration_hours: entry.durationHours,
+    activity_type: entry.activityType,
+    activity_category: entry.activityCategory,
+    experience_type: entry.experienceType,
+    supervision_type: entry.supervisionType,
+    supervision_method: entry.supervisionMethod,
+    supervisor_id: entry.supervisorId || null,
+    client_present: entry.clientPresent,
+    supervisor_client_observation: entry.supervisorClientObservation,
+    setting: entry.setting,
+    notes: entry.notes,
+    manual_override: entry.manualOverride,
+    override_reason: entry.overrideReason,
+    parent_session_id: entry.parentSessionId || null
+  };
+}
+
+function fromCloudEntry(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    startTime: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    durationHours: Number(row.duration_hours || 0),
+    activityType: row.activity_type,
+    activityCategory: row.activity_category,
+    experienceType: row.experience_type,
+    supervisionType: row.supervision_type,
+    supervisionMethod: row.supervision_method,
+    supervisorId: row.supervisor_id || "",
+    clientPresent: row.client_present,
+    supervisorClientObservation: row.supervisor_client_observation,
+    setting: row.setting || "",
+    notes: row.notes || "",
+    manualOverride: row.manual_override,
+    overrideReason: row.override_reason || "",
+    parentSessionId: row.parent_session_id || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function toCloudSupervisor(supervisor) {
+  return {
+    id: supervisor.id,
+    user_id: cloud.user.id,
+    supervisor_name: supervisor.name,
+    credential: supervisor.credential,
+    email: supervisor.email,
+    organization: supervisor.organization,
+    active_status: supervisor.active
+  };
+}
+
+function fromCloudSupervisor(row) {
+  return {
+    id: row.id,
+    name: row.supervisor_name,
+    credential: row.credential || "",
+    email: row.email || "",
+    organization: row.organization || "",
+    active: row.active_status
+  };
 }
 
 function todayIso() {
@@ -177,7 +437,7 @@ function collectEntry() {
   };
 }
 
-function upsertEntry(entry) {
+async function upsertEntry(entry) {
   const index = state.entries.findIndex((item) => item.id === entry.id);
   if (index >= 0) {
     entry.createdAt = state.entries[index].createdAt;
@@ -188,6 +448,14 @@ function upsertEntry(entry) {
   state.entries.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
   saveState();
   renderAll();
+  if (cloud.user) {
+    try {
+      await saveCloudEntry(entry);
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Save error: ${error.message}`);
+    }
+  }
 }
 
 function renderAll() {
@@ -225,7 +493,8 @@ function renderHome() {
   const monthTotals = totals(monthEntries);
   const todayEntries = state.entries.filter((entry) => entry.date === todayIso());
   $("todayStatus").textContent = todayEntries.length ? `${todayEntries.length} entr${todayEntries.length === 1 ? "y" : "ies"} logged today` : "No entry logged today";
-  $("profileStatus").textContent = state.profile.name ? `${state.profile.name}'s local tracker` : "Local profile ready";
+  const mode = cloud.user ? "cloud tracker" : "local tracker";
+  $("profileStatus").textContent = state.profile.name ? `${state.profile.name}'s ${mode}` : cloud.user ? "Cloud profile ready" : "Local profile ready";
   $("monthHours").textContent = formatHours(monthTotals.total);
   $("supervisionPct").textContent = `${percent(monthTotals.supervised, monthTotals.total)}%`;
   $("unrestrictedPct").textContent = `${percent(monthTotals.unrestricted, monthTotals.total)}%`;
@@ -401,14 +670,15 @@ function addSegment(start = "", end = "", activity = "Direct Therapy") {
   $("segments").appendChild(div);
 }
 
-function saveSplitSession() {
+async function saveSplitSession() {
   const parentId = crypto.randomUUID();
   const date = $("splitDate").value;
   const segments = [...$("segments").querySelectorAll(".segment-card")];
+  const newEntries = [];
   segments.forEach((segment) => {
     const activity = getActivity(segment.querySelector(".segment-activity").value);
     const supervised = activity.experience === "Supervised";
-    state.entries.push({
+    newEntries.push({
       id: crypto.randomUUID(),
       date,
       startTime: segment.querySelector(".segment-start").value,
@@ -431,9 +701,18 @@ function saveSplitSession() {
       updatedAt: new Date().toISOString()
     });
   });
+  state.entries.push(...newEntries);
   state.entries.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
   saveState();
   renderAll();
+  if (cloud.user) {
+    try {
+      for (const entry of newEntries) await saveCloudEntry(entry);
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Save error: ${error.message}`);
+    }
+  }
 }
 
 function exportRows() {
@@ -521,7 +800,7 @@ function csvCell(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const activityButton = event.target.closest("[data-activity]");
   if (activityButton) {
     selectedActivity = activityButton.dataset.activity;
@@ -538,9 +817,18 @@ document.addEventListener("click", (event) => {
 
   const deleteSupervisor = event.target.closest("[data-delete-supervisor]");
   if (deleteSupervisor && state.supervisors.length > 1) {
+    const id = deleteSupervisor.dataset.deleteSupervisor;
     state.supervisors = state.supervisors.filter((sup) => sup.id !== deleteSupervisor.dataset.deleteSupervisor);
     saveState();
     renderAll();
+    if (cloud.user) {
+      try {
+        await deleteCloudSupervisor(id);
+        updateAuthUi();
+      } catch (error) {
+        setAuthStatus(`Delete error: ${error.message}`);
+      }
+    }
   }
 });
 
@@ -551,13 +839,13 @@ document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click",
   $(id).addEventListener("change", syncConditionalFields);
 });
 
-$("entryForm").addEventListener("submit", (event) => {
+$("entryForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  upsertEntry(collectEntry());
+  await upsertEntry(collectEntry());
   resetForm();
 });
 
-$("settingsForm").addEventListener("submit", (event) => {
+$("settingsForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   state.profile = {
     name: $("profileName").value.trim(),
@@ -569,21 +857,43 @@ $("settingsForm").addEventListener("submit", (event) => {
   };
   saveState();
   renderAll();
+  if (cloud.user) {
+    try {
+      await saveCloudSettings();
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Settings error: ${error.message}`);
+    }
+  }
 });
 
-$("supervisorForm").addEventListener("submit", (event) => {
+$("supervisorForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  state.supervisors.push({
+  const supervisor = {
     id: crypto.randomUUID(),
     name: $("supervisorName").value.trim(),
     credential: $("supervisorCredential").value.trim(),
     email: $("supervisorEmail").value.trim(),
     organization: $("supervisorOrg").value.trim(),
     active: true
-  });
+  };
+  state.supervisors.push(supervisor);
   event.target.reset();
   saveState();
   renderAll();
+  if (cloud.user) {
+    try {
+      const saved = await saveCloudSupervisor(supervisor);
+      if (saved) {
+        state.supervisors = state.supervisors.map((sup) => sup.id === supervisor.id ? saved : sup);
+        saveState();
+        renderAll();
+      }
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Supervisor error: ${error.message}`);
+    }
+  }
 });
 
 ["filterFrom", "filterTo", "filterCategory", "filterSupervisor", "dashboardMonth"].forEach((id) => {
@@ -597,6 +907,9 @@ $("exportCsvBtn").addEventListener("click", exportCsv);
 $("exportExcelBtn").addEventListener("click", exportExcel);
 $("printBtn").addEventListener("click", printSummary);
 $("printSummaryBtn").addEventListener("click", printSummary);
+$("signInBtn").addEventListener("click", signIn);
+$("signUpBtn").addEventListener("click", signUp);
+$("signOutBtn").addEventListener("click", signOut);
 $("splitSessionBtn").addEventListener("click", () => {
   renderSegments();
   $("splitDialog").showModal();
@@ -604,11 +917,12 @@ $("splitSessionBtn").addEventListener("click", () => {
 $("addSegmentBtn").addEventListener("click", () => addSegment());
 $("closeSplitBtn").addEventListener("click", () => $("splitDialog").close());
 $("cancelSplitBtn").addEventListener("click", () => $("splitDialog").close());
-$("splitForm").addEventListener("submit", (event) => {
+$("splitForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  saveSplitSession();
+  await saveSplitSession();
   $("splitDialog").close();
 });
 
 hydrateFormDefaults();
 renderAll();
+initSupabase();

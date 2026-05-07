@@ -33,4 +33,5 @@ Deployment prep:
 - `vercel.json` is ready for Vercel static hosting.
 - `supabase/schema.sql` contains the first-pass cloud database schema and row-level security policies.
 - `.env.example` lists the Supabase values needed for the cloud version.
+- `config.js` contains the frontend-safe Supabase URL and publishable key used by the static app.
 - `docs/DEPLOYMENT.md` has the dead-simple setup checklist.

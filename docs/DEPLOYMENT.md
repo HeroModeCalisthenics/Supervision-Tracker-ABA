@@ -22,6 +22,12 @@ This project currently runs as a static web app. That means it can be deployed f
 6. Add the Supabase environment values in Vercel.
 7. Test the live site on desktop and mobile.
 
+## Supabase Config
+
+The static app reads Supabase settings from `config.js`.
+
+Only use the publishable/anon key there. Never put the `service_role` key in the app.
+
 ## Free Setup
 
 - GitHub Free: stores the code.
