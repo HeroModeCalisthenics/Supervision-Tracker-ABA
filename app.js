@@ -548,9 +548,9 @@ function renderMonthlyRows() {
   const rows = [...grouped.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([key, entries]) => {
     const t = totals(entries);
     const notePct = percent(entries.filter((entry) => entry.notes).length, entries.length);
-    return `<tr><td>${key}</td><td>${formatHours(t.total)}</td><td>${formatHours(t.restricted)}</td><td>${formatHours(t.unrestricted)}</td><td>${formatHours(t.supervised)}</td><td>${percent(t.supervised, t.total)}%</td><td>${notePct}%</td></tr>`;
+    return `<tr><td data-label="Month">${key}</td><td data-label="Total">${formatHours(t.total)}</td><td data-label="Restricted">${formatHours(t.restricted)}</td><td data-label="Unrestricted">${formatHours(t.unrestricted)}</td><td data-label="Supervised">${formatHours(t.supervised)}</td><td data-label="Supervision %">${percent(t.supervised, t.total)}%</td><td data-label="Notes">${notePct}%</td></tr>`;
   }).join("");
-  $("monthlyRows").innerHTML = rows || `<tr><td colspan="7">No monthly data yet.</td></tr>`;
+  $("monthlyRows").innerHTML = rows || `<tr><td data-label="Monthly summary" colspan="7">No monthly data yet.</td></tr>`;
 }
 
 function renderQualityList(entries) {
@@ -582,17 +582,17 @@ function filteredEntries() {
 
 function renderEntriesTable() {
   const rows = filteredEntries().map((entry) => `<tr>
-    <td>${formatDate(entry.date)}</td>
-    <td>${entry.startTime}-${entry.endTime}</td>
-    <td>${formatHours(entry.durationHours)}</td>
-    <td>${entry.activityType}</td>
-    <td><span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span></td>
-    <td><span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span></td>
-    <td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td>
-    <td>${escapeHtml(entry.notes || "")}</td>
-    <td><button class="ghost-action" data-edit="${entry.id}">Edit</button></td>
+    <td data-label="Date">${formatDate(entry.date)}</td>
+    <td data-label="Time">${entry.startTime}-${entry.endTime}</td>
+    <td data-label="Hours">${formatHours(entry.durationHours)}</td>
+    <td data-label="Activity">${entry.activityType}</td>
+    <td data-label="Category"><span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span></td>
+    <td data-label="Experience"><span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span></td>
+    <td data-label="Supervisor">${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td>
+    <td data-label="Notes">${escapeHtml(entry.notes || "")}</td>
+    <td data-label="Action"><button class="ghost-action" data-edit="${entry.id}">Edit</button></td>
   </tr>`).join("");
-  $("entryRows").innerHTML = rows || `<tr><td colspan="9">No entries match these filters.</td></tr>`;
+  $("entryRows").innerHTML = rows || `<tr><td data-label="Entries" colspan="9">No entries match these filters.</td></tr>`;
 }
 
 function renderSettings() {

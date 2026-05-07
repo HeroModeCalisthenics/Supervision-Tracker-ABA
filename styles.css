@@ -28,6 +28,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -45,6 +46,7 @@ button {
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 18px;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
 }
 
 .topbar,
@@ -267,6 +269,7 @@ textarea {
   border-radius: 8px;
   padding: 12px;
   min-height: 44px;
+  font-size: 16px;
 }
 
 textarea {
@@ -576,7 +579,20 @@ dialog::backdrop {
 
 @media (max-width: 850px) {
   .app-shell {
-    padding: 12px;
+    padding: 10px 10px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .topbar {
+    gap: 10px;
+    padding: 6px 0 12px;
+  }
+
+  h1 {
+    font-size: 1.55rem;
+  }
+
+  h2 {
+    font-size: 1.12rem;
   }
 
   .home-grid,
@@ -587,12 +603,45 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 
-  .metric-strip,
-  .activity-grid,
   .toggle-grid,
   .form-row,
   .conditional {
     grid-template-columns: 1fr;
+  }
+
+  .metric-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .metric-strip article,
+  .stat-card {
+    padding: 12px 10px;
+  }
+
+  .metric-strip span,
+  .metric-strip small,
+  .stat-card span {
+    font-size: 0.72rem;
+  }
+
+  .metric-strip strong,
+  .stat-card strong {
+    font-size: 1.28rem;
+  }
+
+  .activity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .activity-card {
+    min-height: 88px;
+    padding: 10px;
+  }
+
+  .activity-card strong {
+    font-size: 0.88rem;
+    line-height: 1.2;
   }
 
   .hero-panel,
@@ -609,8 +658,30 @@ dialog::backdrop {
     width: 100%;
   }
 
+  .auth-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .auth-form input {
+    grid-column: 1 / -1;
+  }
+
+  .auth-status {
+    text-align: center;
+  }
+
+  .account-panel > .ghost-action,
+  .account-panel > .icon-button {
+    width: 100%;
+  }
+
   .tabs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    top: 0;
+    margin-left: -2px;
+    margin-right: -2px;
   }
 
   .tab {
@@ -628,6 +699,114 @@ dialog::backdrop {
 
   .segment-card {
     grid-template-columns: 1fr;
+  }
+
+  .log-form,
+  .settings-grid,
+  .supervisor-form,
+  .ratio-stack,
+  .two-column > section {
+    padding: 12px;
+  }
+
+  .hero-panel {
+    padding: 14px;
+  }
+
+  .hero-panel .primary-action,
+  .section-heading .secondary-action,
+  .sticky-actions button {
+    width: 100%;
+  }
+
+  .sticky-actions {
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+  }
+
+  .entry-card header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .entry-card header button {
+    width: 100%;
+  }
+
+  .table-wrap {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 8px 10px;
+  }
+
+  td {
+    display: grid;
+    grid-template-columns: minmax(92px, 38%) 1fr;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+    padding: 9px 0;
+    overflow-wrap: anywhere;
+  }
+
+  td:last-child {
+    border-bottom: 0;
+  }
+
+  td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  td .ghost-action {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tab {
+    font-size: 0.72rem;
   }
 }
 
