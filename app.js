@@ -1,0 +1,614 @@
+const STORAGE_KEY = "fieldwork-flow-state-v1";
+
+const activityTypes = [
+  { name: "Direct Therapy", category: "Restricted", experience: "Independent", clientPresent: true, badge: "Restricted", prompt: "Implemented acquisition targets and behavior support plan." },
+  { name: "Supervision Meeting", category: "Unrestricted", experience: "Supervised", clientPresent: false, badge: "Supervised", prompt: "Discussed cases, feedback, competencies, and next steps." },
+  { name: "Graphing Data", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Graphed session data and reviewed trends." },
+  { name: "Data Analysis", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Analyzed data and considered program changes." },
+  { name: "Program Writing / Revision", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Wrote or revised treatment goals, procedures, or materials." },
+  { name: "Assessment", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Completed assessment observation, measurement, or scoring." },
+  { name: "Training", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Provided caregiver or staff training." },
+  { name: "Supervisor Observation During Direct Therapy", category: "Restricted", experience: "Supervised", clientPresent: true, badge: "Supervised", prompt: "Supervisor observed direct implementation with client present." },
+  { name: "Baseline Observation / Measurement Design", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Designed measurement system or completed baseline observation." },
+  { name: "Literature Review", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Reviewed behavior-analytic literature related to programming." },
+  { name: "Other", category: "", experience: "", clientPresent: false, badge: "Review", prompt: "Describe the activity and classify it manually." }
+];
+
+const state = loadState();
+let selectedActivity = activityTypes[0].name;
+
+const $ = (id) => document.getElementById(id);
+
+function loadState() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) return JSON.parse(saved);
+  return {
+    profile: {
+      name: "",
+      email: "",
+      weeklyGoal: 20,
+      unrestrictedTarget: 60,
+      supervisionTarget: 5,
+      defaultSetting: "Clinic"
+    },
+    supervisors: [
+      { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", email: "", organization: "", active: true }
+    ],
+    entries: []
+  };
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function monthKey(date) {
+  return date.slice(0, 7);
+}
+
+function currentMonth() {
+  return todayIso().slice(0, 7);
+}
+
+function getActivity(name = selectedActivity) {
+  return activityTypes.find((item) => item.name === name) || activityTypes.at(-1);
+}
+
+function decimalHours(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let minutes = eh * 60 + em - (sh * 60 + sm);
+  if (minutes < 0) minutes += 24 * 60;
+  return Math.round((minutes / 60) * 100) / 100;
+}
+
+function formatHours(value) {
+  return (Number(value) || 0).toFixed(2);
+}
+
+function percent(part, total) {
+  if (!total) return 0;
+  return Math.round((part / total) * 100);
+}
+
+function renderActivityButtons() {
+  $("activityGrid").innerHTML = activityTypes.map((activity) => {
+    const badgeClass = badgeClassFor(activity.badge);
+    return `<button type="button" class="activity-card ${activity.name === selectedActivity ? "active" : ""}" data-activity="${escapeAttr(activity.name)}">
+      <strong>${activity.name}</strong>
+      <span class="${badgeClass}">${activity.badge}</span>
+    </button>`;
+  }).join("");
+}
+
+function badgeClassFor(value) {
+  const normalized = String(value).toLowerCase();
+  if (normalized.includes("restricted") && !normalized.includes("unrestricted")) return "restricted";
+  if (normalized.includes("unrestricted")) return "unrestricted";
+  if (normalized.includes("supervised")) return "supervised";
+  return "other";
+}
+
+function renderClassification() {
+  const activity = getActivity();
+  const supervisorPresent = $("supervisorPresent").checked || activity.experience === "Supervised";
+  const category = $("manualOverride").checked ? $("activityCategory").value : activity.category || "Needs review";
+  const experience = $("manualOverride").checked ? $("experienceType").value : supervisorPresent ? "Supervised" : activity.experience || "Needs review";
+  const client = $("clientPresent").checked ? "Client present" : "No client";
+  $("classificationPanel").innerHTML = `
+    <span class="pill ${badgeClassFor(category)}">${category}</span>
+    <span class="pill ${badgeClassFor(experience)}">${experience}</span>
+    <span class="pill other">${client}</span>
+    <span class="pill other">${formatHours(decimalHours($("startTime").value, $("endTime").value))} hours</span>
+  `;
+}
+
+function syncConditionalFields() {
+  const supervised = $("supervisorPresent").checked || getActivity().experience === "Supervised" || ($("manualOverride").checked && $("experienceType").value === "Supervised");
+  $("supervisionFields").classList.toggle("visible", supervised);
+  $("overrideFields").classList.toggle("visible", $("manualOverride").checked || getActivity().name === "Other");
+  if (getActivity().name === "Other") $("manualOverride").checked = true;
+  renderClassification();
+}
+
+function hydrateFormDefaults() {
+  $("date").value = todayIso();
+  $("startTime").value = "09:00";
+  $("endTime").value = "10:00";
+  $("setting").value = state.profile.defaultSetting || "";
+  $("dashboardMonth").value = currentMonth();
+  $("splitDate").value = todayIso();
+  $("splitStart").value = "12:00";
+  $("splitEnd").value = "14:30";
+  applyActivityDefaults();
+}
+
+function applyActivityDefaults() {
+  const activity = getActivity();
+  $("clientPresent").checked = !!activity.clientPresent;
+  $("supervisorPresent").checked = activity.experience === "Supervised";
+  $("notes").placeholder = activity.prompt;
+  if (activity.category) $("activityCategory").value = activity.category;
+  if (activity.experience) $("experienceType").value = activity.experience;
+  syncConditionalFields();
+}
+
+function supervisorName(id) {
+  return state.supervisors.find((sup) => sup.id === id)?.name || "";
+}
+
+function renderSupervisorSelects() {
+  const options = state.supervisors.map((sup) => `<option value="${sup.id}">${escapeHtml(sup.name)}${sup.credential ? `, ${escapeHtml(sup.credential)}` : ""}</option>`).join("");
+  const allOption = `<option value="">All</option>`;
+  $("supervisorId").innerHTML = options || `<option value="">Add a supervisor first</option>`;
+  $("filterSupervisor").innerHTML = allOption + options;
+}
+
+function collectEntry() {
+  const activity = getActivity();
+  const manual = $("manualOverride").checked || activity.name === "Other";
+  const supervised = $("supervisorPresent").checked || activity.experience === "Supervised" || (manual && $("experienceType").value === "Supervised");
+  return {
+    id: $("editingId").value || crypto.randomUUID(),
+    date: $("date").value,
+    startTime: $("startTime").value,
+    endTime: $("endTime").value,
+    durationHours: decimalHours($("startTime").value, $("endTime").value),
+    activityType: activity.name,
+    activityCategory: manual ? $("activityCategory").value : activity.category || "Restricted",
+    experienceType: supervised ? "Supervised" : (manual ? $("experienceType").value : activity.experience || "Independent"),
+    supervisionType: supervised ? $("supervisionType").value : "None",
+    supervisionMethod: supervised ? $("supervisionMethod").value : "None",
+    supervisorId: supervised ? $("supervisorId").value : "",
+    clientPresent: $("clientPresent").checked,
+    supervisorClientObservation: supervised ? $("supervisorClientObservation").checked : false,
+    setting: $("setting").value.trim(),
+    notes: $("notes").value.trim(),
+    manualOverride: manual,
+    overrideReason: manual ? $("overrideReason").value.trim() : "",
+    parentSessionId: "",
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  };
+}
+
+function upsertEntry(entry) {
+  const index = state.entries.findIndex((item) => item.id === entry.id);
+  if (index >= 0) {
+    entry.createdAt = state.entries[index].createdAt;
+    state.entries[index] = entry;
+  } else {
+    state.entries.push(entry);
+  }
+  state.entries.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
+  saveState();
+  renderAll();
+}
+
+function renderAll() {
+  renderSupervisorSelects();
+  renderActivityButtons();
+  renderHome();
+  renderRecentEntries();
+  renderDashboard();
+  renderEntriesTable();
+  renderSettings();
+  renderSupervisors();
+  renderClassification();
+}
+
+function entriesForMonth(key = $("dashboardMonth").value || currentMonth()) {
+  return state.entries.filter((entry) => monthKey(entry.date) === key);
+}
+
+function totals(entries) {
+  const sum = (filter) => entries.filter(filter).reduce((acc, entry) => acc + Number(entry.durationHours || 0), 0);
+  const total = sum(() => true);
+  return {
+    total,
+    independent: sum((entry) => entry.experienceType === "Independent"),
+    supervised: sum((entry) => entry.experienceType === "Supervised"),
+    restricted: sum((entry) => entry.activityCategory === "Restricted"),
+    unrestricted: sum((entry) => entry.activityCategory === "Unrestricted"),
+    contacts: entries.filter((entry) => entry.experienceType === "Supervised").length,
+    observations: entries.filter((entry) => entry.supervisorClientObservation).length
+  };
+}
+
+function renderHome() {
+  const monthEntries = entriesForMonth(currentMonth());
+  const monthTotals = totals(monthEntries);
+  const todayEntries = state.entries.filter((entry) => entry.date === todayIso());
+  $("todayStatus").textContent = todayEntries.length ? `${todayEntries.length} entr${todayEntries.length === 1 ? "y" : "ies"} logged today` : "No entry logged today";
+  $("profileStatus").textContent = state.profile.name ? `${state.profile.name}'s local tracker` : "Local profile ready";
+  $("monthHours").textContent = formatHours(monthTotals.total);
+  $("supervisionPct").textContent = `${percent(monthTotals.supervised, monthTotals.total)}%`;
+  $("unrestrictedPct").textContent = `${percent(monthTotals.unrestricted, monthTotals.total)}%`;
+}
+
+function renderRecentEntries() {
+  const recent = state.entries.slice(0, 3);
+  $("recentEntries").innerHTML = recent.length ? recent.map(entryCard).join("") : `<div class="entry-card"><p class="muted">No entries yet.</p></div>`;
+}
+
+function entryCard(entry) {
+  return `<article class="entry-card">
+    <header>
+      <div><strong>${formatDate(entry.date)} - ${entry.activityType}</strong><p class="muted">${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hours</p></div>
+      <button class="ghost-action" data-edit="${entry.id}">Edit</button>
+    </header>
+    <p>${escapeHtml(entry.notes || "No notes added")}</p>
+    <footer>
+      <span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span>
+      <span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span>
+      ${entry.supervisorId ? `<span class="pill other">${escapeHtml(supervisorName(entry.supervisorId))}</span>` : ""}
+    </footer>
+  </article>`;
+}
+
+function renderDashboard() {
+  const monthEntries = entriesForMonth();
+  const monthTotals = totals(monthEntries);
+  $("dashTotal").textContent = formatHours(monthTotals.total);
+  $("dashIndependent").textContent = formatHours(monthTotals.independent);
+  $("dashSupervised").textContent = formatHours(monthTotals.supervised);
+  $("dashRestricted").textContent = formatHours(monthTotals.restricted);
+  $("dashUnrestricted").textContent = formatHours(monthTotals.unrestricted);
+  $("dashContacts").textContent = String(monthTotals.contacts);
+  const supervision = percent(monthTotals.supervised, monthTotals.total);
+  const unrestricted = percent(monthTotals.unrestricted, monthTotals.total);
+  $("dashSupervisionPct").textContent = `${supervision}%`;
+  $("dashUnrestrictedPct").textContent = `${unrestricted}%`;
+  $("supervisionBar").style.width = `${Math.min(supervision, 100)}%`;
+  $("unrestrictedBar").style.width = `${Math.min(unrestricted, 100)}%`;
+  renderMonthlyRows();
+  renderQualityList(monthEntries);
+}
+
+function renderMonthlyRows() {
+  const grouped = new Map();
+  state.entries.forEach((entry) => {
+    const key = monthKey(entry.date);
+    grouped.set(key, [...(grouped.get(key) || []), entry]);
+  });
+  const rows = [...grouped.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([key, entries]) => {
+    const t = totals(entries);
+    const notePct = percent(entries.filter((entry) => entry.notes).length, entries.length);
+    return `<tr><td>${key}</td><td>${formatHours(t.total)}</td><td>${formatHours(t.restricted)}</td><td>${formatHours(t.unrestricted)}</td><td>${formatHours(t.supervised)}</td><td>${percent(t.supervised, t.total)}%</td><td>${notePct}%</td></tr>`;
+  }).join("");
+  $("monthlyRows").innerHTML = rows || `<tr><td colspan="7">No monthly data yet.</td></tr>`;
+}
+
+function renderQualityList(entries) {
+  const missingNotes = entries.filter((entry) => !entry.notes).length;
+  const missingSupervisor = entries.filter((entry) => entry.experienceType === "Supervised" && !entry.supervisorId).length;
+  const overrides = entries.filter((entry) => entry.manualOverride).length;
+  const other = entries.filter((entry) => entry.activityType === "Other").length;
+  $("qualityList").innerHTML = [
+    ["Entries missing notes", missingNotes],
+    ["Supervised entries missing supervisor", missingSupervisor],
+    ["Entries with manual override", overrides],
+    ["Entries marked Other", other]
+  ].map(([label, value]) => `<div class="quality-item"><strong>${value}</strong><p class="muted">${label}</p></div>`).join("");
+}
+
+function filteredEntries() {
+  const from = $("filterFrom").value;
+  const to = $("filterTo").value;
+  const category = $("filterCategory").value;
+  const supervisor = $("filterSupervisor").value;
+  return state.entries.filter((entry) => {
+    if (from && entry.date < from) return false;
+    if (to && entry.date > to) return false;
+    if (category && entry.activityCategory !== category) return false;
+    if (supervisor && entry.supervisorId !== supervisor) return false;
+    return true;
+  });
+}
+
+function renderEntriesTable() {
+  const rows = filteredEntries().map((entry) => `<tr>
+    <td>${formatDate(entry.date)}</td>
+    <td>${entry.startTime}-${entry.endTime}</td>
+    <td>${formatHours(entry.durationHours)}</td>
+    <td>${entry.activityType}</td>
+    <td><span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span></td>
+    <td><span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span></td>
+    <td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td>
+    <td>${escapeHtml(entry.notes || "")}</td>
+    <td><button class="ghost-action" data-edit="${entry.id}">Edit</button></td>
+  </tr>`).join("");
+  $("entryRows").innerHTML = rows || `<tr><td colspan="9">No entries match these filters.</td></tr>`;
+}
+
+function renderSettings() {
+  $("profileName").value = state.profile.name || "";
+  $("profileEmail").value = state.profile.email || "";
+  $("weeklyGoal").value = state.profile.weeklyGoal || 0;
+  $("unrestrictedTarget").value = state.profile.unrestrictedTarget || 60;
+  $("supervisionTarget").value = state.profile.supervisionTarget || 5;
+  $("defaultSetting").value = state.profile.defaultSetting || "";
+}
+
+function renderSupervisors() {
+  $("supervisorList").innerHTML = state.supervisors.map((sup) => `<article class="entry-card">
+    <header><strong>${escapeHtml(sup.name)}</strong><button class="ghost-action" data-delete-supervisor="${sup.id}">Remove</button></header>
+    <p class="muted">${escapeHtml([sup.credential, sup.organization, sup.email].filter(Boolean).join(" - ") || "No details")}</p>
+  </article>`).join("");
+}
+
+function editEntry(id) {
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) return;
+  selectedActivity = entry.activityType;
+  $("editingId").value = entry.id;
+  $("date").value = entry.date;
+  $("startTime").value = entry.startTime;
+  $("endTime").value = entry.endTime;
+  $("supervisorPresent").checked = entry.experienceType === "Supervised";
+  $("clientPresent").checked = entry.clientPresent;
+  $("supervisorId").value = entry.supervisorId || state.supervisors[0]?.id || "";
+  $("supervisionType").value = entry.supervisionType === "None" ? "Individual" : entry.supervisionType;
+  $("supervisionMethod").value = entry.supervisionMethod === "None" ? "In-person" : entry.supervisionMethod;
+  $("supervisorClientObservation").checked = entry.supervisorClientObservation;
+  $("manualOverride").checked = entry.manualOverride;
+  $("activityCategory").value = entry.activityCategory;
+  $("experienceType").value = entry.experienceType;
+  $("overrideReason").value = entry.overrideReason || "";
+  $("setting").value = entry.setting || "";
+  $("notes").value = entry.notes || "";
+  switchView("quickLog");
+  syncConditionalFields();
+  renderActivityButtons();
+}
+
+function resetForm() {
+  $("entryForm").reset();
+  $("editingId").value = "";
+  selectedActivity = activityTypes[0].name;
+  hydrateFormDefaults();
+  renderActivityButtons();
+}
+
+function switchView(id) {
+  document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === id));
+  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === id));
+}
+
+function renderSegments() {
+  const rows = $("segments").querySelectorAll(".segment-card");
+  if (rows.length) return;
+  addSegment("12:00", "14:00", "Direct Therapy");
+  addSegment("14:00", "14:20", "Graphing Data");
+  addSegment("14:20", "14:30", "Supervision Meeting");
+}
+
+function addSegment(start = "", end = "", activity = "Direct Therapy") {
+  const div = document.createElement("div");
+  div.className = "segment-card";
+  div.innerHTML = `
+    <label>Start <input type="time" class="segment-start" value="${start}" required /></label>
+    <label>End <input type="time" class="segment-end" value="${end}" required /></label>
+    <label>Activity <select class="segment-activity">${activityTypes.map((item) => `<option ${item.name === activity ? "selected" : ""}>${item.name}</option>`).join("")}</select></label>
+    <button type="button" class="icon-button segment-remove" aria-label="Remove segment">x</button>
+    <label class="full">Notes <input class="segment-notes" placeholder="Optional segment notes" /></label>
+  `;
+  $("segments").appendChild(div);
+}
+
+function saveSplitSession() {
+  const parentId = crypto.randomUUID();
+  const date = $("splitDate").value;
+  const segments = [...$("segments").querySelectorAll(".segment-card")];
+  segments.forEach((segment) => {
+    const activity = getActivity(segment.querySelector(".segment-activity").value);
+    const supervised = activity.experience === "Supervised";
+    state.entries.push({
+      id: crypto.randomUUID(),
+      date,
+      startTime: segment.querySelector(".segment-start").value,
+      endTime: segment.querySelector(".segment-end").value,
+      durationHours: decimalHours(segment.querySelector(".segment-start").value, segment.querySelector(".segment-end").value),
+      activityType: activity.name,
+      activityCategory: activity.category || "Restricted",
+      experienceType: activity.experience || "Independent",
+      supervisionType: supervised ? "Individual" : "None",
+      supervisionMethod: supervised ? "In-person" : "None",
+      supervisorId: supervised ? $("supervisorId").value : "",
+      clientPresent: activity.clientPresent,
+      supervisorClientObservation: activity.name.includes("Observation"),
+      setting: state.profile.defaultSetting || "",
+      notes: segment.querySelector(".segment-notes").value.trim(),
+      manualOverride: false,
+      overrideReason: "",
+      parentSessionId: parentId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  });
+  state.entries.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
+  saveState();
+  renderAll();
+}
+
+function exportRows() {
+  return filteredEntries().map((entry) => ({
+    Date: entry.date,
+    Start: entry.startTime,
+    End: entry.endTime,
+    Hours: entry.durationHours,
+    Activity: entry.activityType,
+    Category: entry.activityCategory,
+    Experience: entry.experienceType,
+    "Supervision Type": entry.supervisionType,
+    "Supervision Method": entry.supervisionMethod,
+    Supervisor: supervisorName(entry.supervisorId),
+    "Client Present": entry.clientPresent ? "Yes" : "No",
+    "Supervisor-Client Observation": entry.supervisorClientObservation ? "Yes" : "No",
+    Setting: entry.setting,
+    Notes: entry.notes,
+    "Manual Override": entry.manualOverride ? "Yes" : "No",
+    "Override Reason": entry.overrideReason,
+    "Parent Session": entry.parentSessionId
+  }));
+}
+
+function download(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCsv() {
+  const rows = exportRows();
+  const headers = Object.keys(rows[0] || { Date: "", Start: "", End: "", Hours: "" });
+  const csv = [headers.join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))].join("\n");
+  download(`fieldwork-flow-${todayIso()}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+function exportExcel() {
+  const rows = exportRows();
+  const headers = Object.keys(rows[0] || { Date: "", Start: "", End: "", Hours: "" });
+  const table = `<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  download(`fieldwork-flow-${todayIso()}.xls`, table, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function buildPrintSummary() {
+  const key = $("dashboardMonth").value || currentMonth();
+  const monthEntries = entriesForMonth(key);
+  const t = totals(monthEntries);
+  return `
+    <h2>${key}</h2>
+    <p>Total: ${formatHours(t.total)} - Restricted: ${formatHours(t.restricted)} - Unrestricted: ${formatHours(t.unrestricted)} - Supervised: ${formatHours(t.supervised)} - Contacts: ${t.contacts} - Observations: ${t.observations}</p>
+    <table><thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Activity</th><th>Category</th><th>Experience</th><th>Supervisor</th><th>Notes</th></tr></thead>
+    <tbody>${monthEntries.map((entry) => `<tr><td>${entry.date}</td><td>${entry.startTime}-${entry.endTime}</td><td>${formatHours(entry.durationHours)}</td><td>${escapeHtml(entry.activityType)}</td><td>${entry.activityCategory}</td><td>${entry.experienceType}</td><td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td><td>${escapeHtml(entry.notes || "")}</td></tr>`).join("")}</tbody></table>
+  `;
+}
+
+function printSummary() {
+  let summary = document.querySelector(".print-summary");
+  if (!summary) {
+    summary = $("printTemplate").content.firstElementChild.cloneNode(true);
+    document.querySelector(".app-shell").appendChild(summary);
+  }
+  summary.querySelector("#printContent").innerHTML = buildPrintSummary();
+  window.print();
+}
+
+function formatDate(date) {
+  const [year, month, day] = date.split("-");
+  return `${month}/${day}/${year}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/"/g, "&quot;");
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+document.addEventListener("click", (event) => {
+  const activityButton = event.target.closest("[data-activity]");
+  if (activityButton) {
+    selectedActivity = activityButton.dataset.activity;
+    $("manualOverride").checked = selectedActivity === "Other";
+    applyActivityDefaults();
+    renderActivityButtons();
+  }
+
+  const editButton = event.target.closest("[data-edit]");
+  if (editButton) editEntry(editButton.dataset.edit);
+
+  const removeSegment = event.target.closest(".segment-remove");
+  if (removeSegment) removeSegment.closest(".segment-card").remove();
+
+  const deleteSupervisor = event.target.closest("[data-delete-supervisor]");
+  if (deleteSupervisor && state.supervisors.length > 1) {
+    state.supervisors = state.supervisors.filter((sup) => sup.id !== deleteSupervisor.dataset.deleteSupervisor);
+    saveState();
+    renderAll();
+  }
+});
+
+document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
+
+["startTime", "endTime", "supervisorPresent", "clientPresent", "manualOverride", "activityCategory", "experienceType"].forEach((id) => {
+  $(id).addEventListener("input", syncConditionalFields);
+  $(id).addEventListener("change", syncConditionalFields);
+});
+
+$("entryForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  upsertEntry(collectEntry());
+  resetForm();
+});
+
+$("settingsForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  state.profile = {
+    name: $("profileName").value.trim(),
+    email: $("profileEmail").value.trim(),
+    weeklyGoal: Number($("weeklyGoal").value || 0),
+    unrestrictedTarget: Number($("unrestrictedTarget").value || 60),
+    supervisionTarget: Number($("supervisionTarget").value || 5),
+    defaultSetting: $("defaultSetting").value.trim()
+  };
+  saveState();
+  renderAll();
+});
+
+$("supervisorForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  state.supervisors.push({
+    id: crypto.randomUUID(),
+    name: $("supervisorName").value.trim(),
+    credential: $("supervisorCredential").value.trim(),
+    email: $("supervisorEmail").value.trim(),
+    organization: $("supervisorOrg").value.trim(),
+    active: true
+  });
+  event.target.reset();
+  saveState();
+  renderAll();
+});
+
+["filterFrom", "filterTo", "filterCategory", "filterSupervisor", "dashboardMonth"].forEach((id) => {
+  $(id).addEventListener("input", renderAll);
+  $(id).addEventListener("change", renderAll);
+});
+
+$("focusLogBtn").addEventListener("click", () => switchView("quickLog"));
+$("resetFormBtn").addEventListener("click", resetForm);
+$("exportCsvBtn").addEventListener("click", exportCsv);
+$("exportExcelBtn").addEventListener("click", exportExcel);
+$("printBtn").addEventListener("click", printSummary);
+$("printSummaryBtn").addEventListener("click", printSummary);
+$("splitSessionBtn").addEventListener("click", () => {
+  renderSegments();
+  $("splitDialog").showModal();
+});
+$("addSegmentBtn").addEventListener("click", () => addSegment());
+$("closeSplitBtn").addEventListener("click", () => $("splitDialog").close());
+$("cancelSplitBtn").addEventListener("click", () => $("splitDialog").close());
+$("splitForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveSplitSession();
+  $("splitDialog").close();
+});
+
+hydrateFormDefaults();
+renderAll();

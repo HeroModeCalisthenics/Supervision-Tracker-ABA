@@ -1,0 +1,10 @@
+{
+  "name": "fieldwork-flow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile-first supervision and fieldwork hour tracker.",
+  "scripts": {
+    "start": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "check": "node --check app.js"
+  }
+}

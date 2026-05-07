@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fieldwork Flow</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Fieldwork Flow</p>
+          <h1>Supervision tracker</h1>
+        </div>
+        <button class="icon-button" id="printSummaryBtn" title="Print monthly summary" aria-label="Print monthly summary">P</button>
+      </header>
+
+      <main>
+        <section class="home-grid" id="home">
+          <div class="hero-panel">
+            <div>
+              <p class="eyebrow">Today</p>
+              <h2 id="todayStatus">No entry logged today</h2>
+              <p class="muted" id="profileStatus">Local profile ready</p>
+            </div>
+            <button class="primary-action" id="focusLogBtn">Log Activity</button>
+          </div>
+
+          <div class="metric-strip">
+            <article>
+              <span>This month</span>
+              <strong id="monthHours">0.00</strong>
+              <small>total hours</small>
+            </article>
+            <article>
+              <span>Supervision</span>
+              <strong id="supervisionPct">0%</strong>
+              <small>this month</small>
+            </article>
+            <article>
+              <span>Unrestricted</span>
+              <strong id="unrestrictedPct">0%</strong>
+              <small>this month</small>
+            </article>
+          </div>
+        </section>
+
+        <nav class="tabs" aria-label="Primary">
+          <button class="tab active" data-view="quickLog">Quick log</button>
+          <button class="tab" data-view="dashboard">Dashboard</button>
+          <button class="tab" data-view="entries">Entries</button>
+          <button class="tab" data-view="settings">Settings</button>
+        </nav>
+
+        <section class="view active" id="quickLog">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Fast entry</p>
+              <h2>Quick log</h2>
+            </div>
+            <button class="secondary-action" id="splitSessionBtn">Split session</button>
+          </div>
+
+          <form class="log-form" id="entryForm">
+            <input type="hidden" id="editingId" />
+            <div class="form-row">
+              <label>Date <input type="date" id="date" required /></label>
+              <label>Start <input type="time" id="startTime" required /></label>
+              <label>End <input type="time" id="endTime" required /></label>
+            </div>
+
+            <fieldset>
+              <legend>Activity type</legend>
+              <div class="activity-grid" id="activityGrid"></div>
+            </fieldset>
+
+            <div class="classification-panel" id="classificationPanel"></div>
+
+            <div class="toggle-grid">
+              <label class="switch-row"><span>Supervisor present?</span><input type="checkbox" id="supervisorPresent" /></label>
+              <label class="switch-row"><span>Client present?</span><input type="checkbox" id="clientPresent" /></label>
+              <label class="switch-row"><span>Manual override?</span><input type="checkbox" id="manualOverride" /></label>
+            </div>
+
+            <div class="conditional" id="supervisionFields">
+              <label>Supervisor <select id="supervisorId"></select></label>
+              <label>Supervision type
+                <select id="supervisionType">
+                  <option>Individual</option>
+                  <option>Group</option>
+                </select>
+              </label>
+              <label>Method
+                <select id="supervisionMethod">
+                  <option>In-person</option>
+                  <option>Telehealth</option>
+                  <option>Phone</option>
+                  <option>Asynchronous review</option>
+                </select>
+              </label>
+              <label class="switch-row observation"><span>Supervisor-client observation?</span><input type="checkbox" id="supervisorClientObservation" /></label>
+            </div>
+
+            <div class="conditional" id="overrideFields">
+              <label>Activity category
+                <select id="activityCategory">
+                  <option>Restricted</option>
+                  <option>Unrestricted</option>
+                </select>
+              </label>
+              <label>Experience type
+                <select id="experienceType">
+                  <option>Independent</option>
+                  <option>Supervised</option>
+                </select>
+              </label>
+              <label class="full">Override reason <input id="overrideReason" placeholder="Why this classification fits" /></label>
+            </div>
+
+            <label>Setting <input id="setting" placeholder="Clinic, home, school..." /></label>
+            <label>Notes <textarea id="notes" rows="3" placeholder="Audit-friendly context, targets, feedback, or work product"></textarea></label>
+
+            <div class="sticky-actions">
+              <button type="button" class="ghost-action" id="resetFormBtn">Clear</button>
+              <button type="submit" class="primary-action" id="saveBtn">Save entry</button>
+            </div>
+          </form>
+
+          <div class="section-heading compact">
+            <h3>Recent entries</h3>
+          </div>
+          <div class="entry-list" id="recentEntries"></div>
+        </section>
+
+        <section class="view" id="dashboard">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Progress</p>
+              <h2>Monthly dashboard</h2>
+            </div>
+            <input type="month" id="dashboardMonth" />
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="stat-card"><span>Total hours</span><strong id="dashTotal">0.00</strong></article>
+            <article class="stat-card"><span>Independent</span><strong id="dashIndependent">0.00</strong></article>
+            <article class="stat-card"><span>Supervised</span><strong id="dashSupervised">0.00</strong></article>
+            <article class="stat-card"><span>Restricted</span><strong id="dashRestricted">0.00</strong></article>
+            <article class="stat-card"><span>Unrestricted</span><strong id="dashUnrestricted">0.00</strong></article>
+            <article class="stat-card"><span>Contacts</span><strong id="dashContacts">0</strong></article>
+          </div>
+
+          <div class="ratio-stack">
+            <div class="ratio-row"><span>Current supervision percentage</span><strong id="dashSupervisionPct">0%</strong><div><i id="supervisionBar"></i></div></div>
+            <div class="ratio-row"><span>Current unrestricted percentage</span><strong id="dashUnrestrictedPct">0%</strong><div><i id="unrestrictedBar"></i></div></div>
+          </div>
+
+          <div class="two-column">
+            <section>
+              <h3>Monthly summary</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Month</th><th>Total</th><th>Restricted</th><th>Unrestricted</th><th>Supervised</th><th>Supervision %</th><th>Notes</th></tr></thead>
+                  <tbody id="monthlyRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <section>
+              <h3>Entry quality</h3>
+              <div class="quality-list" id="qualityList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="entries">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Review</p>
+              <h2>Entries</h2>
+            </div>
+            <div class="export-actions">
+              <button class="secondary-action" id="exportCsvBtn">CSV</button>
+              <button class="secondary-action" id="exportExcelBtn">Excel</button>
+              <button class="secondary-action" id="printBtn">Print</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <label>From <input type="date" id="filterFrom" /></label>
+            <label>To <input type="date" id="filterTo" /></label>
+            <label>Category
+              <select id="filterCategory">
+                <option value="">All</option>
+                <option>Restricted</option>
+                <option>Unrestricted</option>
+              </select>
+            </label>
+            <label>Supervisor
+              <select id="filterSupervisor"></select>
+            </label>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Activity</th><th>Category</th><th>Experience</th><th>Supervisor</th><th>Notes</th><th></th></tr></thead>
+              <tbody id="entryRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Setup</p>
+              <h2>Profile and supervisors</h2>
+            </div>
+          </div>
+
+          <form class="settings-grid" id="settingsForm">
+            <label>Name <input id="profileName" placeholder="Your name" /></label>
+            <label>Email <input id="profileEmail" type="email" placeholder="you@example.com" /></label>
+            <label>Weekly hour goal <input id="weeklyGoal" type="number" min="0" step="0.25" /></label>
+            <label>Unrestricted target % <input id="unrestrictedTarget" type="number" min="0" max="100" /></label>
+            <label>Supervision target % <input id="supervisionTarget" type="number" min="0" max="100" /></label>
+            <label>Default setting <input id="defaultSetting" placeholder="Clinic" /></label>
+            <button class="primary-action full" type="submit">Save settings</button>
+          </form>
+
+          <form class="supervisor-form" id="supervisorForm">
+            <h3>Add supervisor</h3>
+            <label>Name <input id="supervisorName" required /></label>
+            <label>Credential <input id="supervisorCredential" placeholder="BCBA" /></label>
+            <label>Email <input id="supervisorEmail" type="email" /></label>
+            <label>Organization <input id="supervisorOrg" /></label>
+            <button class="secondary-action" type="submit">Add supervisor</button>
+          </form>
+          <div class="entry-list" id="supervisorList"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="splitDialog">
+      <form method="dialog" class="split-modal" id="splitForm">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Mixed session</p>
+            <h2>Split session</h2>
+          </div>
+          <button type="button" class="icon-button" id="closeSplitBtn" aria-label="Close">x</button>
+        </div>
+        <div class="form-row">
+          <label>Date <input type="date" id="splitDate" required /></label>
+          <label>Total start <input type="time" id="splitStart" required /></label>
+          <label>Total end <input type="time" id="splitEnd" required /></label>
+        </div>
+        <div id="segments"></div>
+        <button type="button" class="secondary-action" id="addSegmentBtn">Add segment</button>
+        <div class="sticky-actions">
+          <button type="button" class="ghost-action" id="cancelSplitBtn">Cancel</button>
+          <button type="submit" class="primary-action" id="saveSplitBtn">Save segments</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="printTemplate">
+      <section class="print-summary">
+        <h1>Fieldwork Flow Monthly Summary</h1>
+        <p class="muted">This tool is designed to help organize and summarize fieldwork tracking information. It does not guarantee BACB compliance. Users are responsible for verifying all entries and requirements with their supervisor and the current BACB handbook.</p>
+        <div id="printContent"></div>
+      </section>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
