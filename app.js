@@ -649,6 +649,7 @@ function renderDashboard() {
   renderMonthlyRows();
   renderQualityList(monthEntries);
   renderPathPanel(monthEntries);
+  renderTotalHours();
 }
 
 function renderHomePath(entries) {
@@ -765,6 +766,42 @@ function renderMonthlyRows() {
     return `<tr><td data-label="Month">${key}</td><td data-label="Total">${formatHours(t.total)}</td><td data-label="Restricted">${formatHours(t.restricted)}</td><td data-label="Unrestricted">${formatHours(t.unrestricted)}</td><td data-label="Supervised">${formatHours(t.supervised)}</td><td data-label="Supervision %">${percent(t.supervised, t.total)}%</td><td data-label="Notes">${notePct}%</td></tr>`;
   }).join("");
   $("monthlyRows").innerHTML = rows || `<tr><td data-label="Monthly summary" colspan="7">No monthly data yet.</td></tr>`;
+}
+
+function groupedEntriesByMonth() {
+  const grouped = new Map();
+  state.entries.forEach((entry) => {
+    const key = monthKey(entry.date);
+    grouped.set(key, [...(grouped.get(key) || []), entry]);
+  });
+  return [...grouped.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function renderTotalHours() {
+  const allTotals = totals(state.entries);
+  $("totalAllHours").textContent = formatHours(allTotals.total);
+  $("totalIndependentHours").textContent = formatHours(allTotals.independent);
+  $("totalSupervisedHours").textContent = formatHours(allTotals.supervised);
+  $("totalUnrestrictedHours").textContent = formatHours(allTotals.unrestricted);
+  $("totalContacts").textContent = String(allTotals.contacts);
+  $("totalObservations").textContent = String(allTotals.observations);
+
+  const rows = groupedEntriesByMonth().map(([key, entries]) => {
+    const t = totals(entries);
+    const groupPct = percent(t.groupSupervision, t.supervised);
+    return `<tr>
+      <td data-label="Month">${key}</td>
+      <td data-label="Total">${formatHours(t.total)}</td>
+      <td data-label="Independent">${formatHours(t.independent)}</td>
+      <td data-label="Supervised">${formatHours(t.supervised)}</td>
+      <td data-label="Unrestricted">${formatHours(t.unrestricted)}</td>
+      <td data-label="Contacts">${t.contacts}</td>
+      <td data-label="Observations">${t.observations}</td>
+      <td data-label="Supervision %">${percent(t.supervised, t.total)}%</td>
+      <td data-label="Group %">${groupPct}%</td>
+    </tr>`;
+  }).join("");
+  $("totalHoursRows").innerHTML = rows || `<tr><td data-label="Total hours" colspan="9">No fieldwork hours logged yet.</td></tr>`;
 }
 
 function renderQualityList(entries) {

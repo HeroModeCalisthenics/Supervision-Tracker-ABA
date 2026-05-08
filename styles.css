@@ -140,6 +140,7 @@ h3 {
 .log-form,
 .stat-card,
 .path-panel,
+.total-hours-panel,
 .two-column > section,
 .supervisor-form,
 .settings-grid,
@@ -505,6 +506,45 @@ textarea {
 .path-panel {
   margin: 14px 0;
   padding: 16px;
+}
+
+.total-hours-panel {
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.cumulative-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cumulative-grid article {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.cumulative-grid span,
+.cumulative-grid strong {
+  display: block;
+}
+
+.cumulative-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cumulative-grid strong {
+  margin-top: 4px;
+  font-size: 1.28rem;
+}
+
+.total-hours-table {
+  box-shadow: none;
 }
 
 .path-grid {
@@ -1071,6 +1111,27 @@ dialog::backdrop {
     padding: 12px;
   }
 
+  .total-hours-panel {
+    padding: 12px;
+  }
+
+  .cumulative-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .cumulative-grid article {
+    padding: 10px;
+  }
+
+  .cumulative-grid span {
+    font-size: 0.68rem;
+  }
+
+  .cumulative-grid strong {
+    font-size: 1.05rem;
+  }
+
   .path-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1159,6 +1220,10 @@ dialog::backdrop {
 
   .path-detail {
     grid-template-columns: 1fr;
+  }
+
+  .cumulative-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
