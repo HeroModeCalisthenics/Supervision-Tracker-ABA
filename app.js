@@ -638,6 +638,81 @@ function setPathCard(prefix, path) {
   $(`${prefix}PathCard`).classList.toggle("not-yet", !path.yes);
 }
 
+function openMonthlyReview() {
+  renderMonthlyReview();
+  $("monthlyReviewDialog").showModal();
+}
+
+function renderMonthlyReview() {
+  const key = $("dashboardMonth").value || currentMonth();
+  const entries = entriesForMonth(key);
+  const t = totals(entries);
+  const docs = documentationStats(entries);
+  const standard = evaluatePath(entries, "standard");
+  const concentrated = evaluatePath(entries, "concentrated");
+  const ready = entries.length > 0 && docs.missingNotes === 0 && docs.missingSupervisor === 0 && (standard.yes || concentrated.yes);
+
+  $("reviewTitle").textContent = `${monthLabel(key)} Review`;
+  $("reviewReadyState").textContent = ready ? "Ready" : "Not yet";
+  $("reviewStandardState").textContent = standard.yes ? "Yes" : "Not yet";
+  $("reviewConcentratedState").textContent = concentrated.yes ? "Yes" : "Not yet";
+  $("monthlyReviewContent").innerHTML = `
+    ${reviewSection("Totals", [
+      ["Total hours", formatHours(t.total)],
+      ["Restricted", formatHours(t.restricted)],
+      ["Unrestricted", formatHours(t.unrestricted)],
+      ["Independent", formatHours(t.independent)],
+      ["Supervised", formatHours(t.supervised)]
+    ])}
+    ${reviewSection("Supervision", [
+      ["Supervision %", `${percent(t.supervised, t.total)}%`],
+      ["Contacts", t.contacts],
+      ["Client observations", t.observations],
+      ["Individual", formatHours(t.individualSupervision)],
+      ["Group", formatHours(t.groupSupervision)]
+    ])}
+    ${reviewSection("Documentation", [
+      ["Missing notes", docs.missingNotes],
+      ["Thin notes", docs.thinNotes],
+      ["Looks detailed", docs.detailedNotes],
+      ["Supervised missing supervisor", docs.missingSupervisor],
+      ["Manual overrides", docs.overrides],
+      ["Other entries", docs.other]
+    ], "Thin notes have fewer than 8 words.")}
+    <section class="review-section">
+      <h3>Entries</h3>
+      <div class="review-entry-list">
+        ${entries.length ? entries.map(reviewEntryCard).join("") : `<div class="review-empty">No entries logged for this month.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function reviewSection(title, rows, helper = "") {
+  return `<section class="review-section">
+    <h3>${title}</h3>
+    <div class="review-rows">
+      ${rows.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("")}
+    </div>
+    ${helper ? `<p class="muted review-helper">${helper}</p>` : ""}
+  </section>`;
+}
+
+function reviewEntryCard(entry) {
+  return `<article class="review-entry-card">
+    <div>
+      <strong>${formatDate(entry.date)} - ${entry.activityType}</strong>
+      <span>${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hrs</span>
+    </div>
+    <div class="classification-panel">
+      <span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span>
+      <span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span>
+      ${entry.supervisorId ? `<span class="pill other">${escapeHtml(supervisorName(entry.supervisorId))}</span>` : ""}
+    </div>
+    <p>${escapeHtml(entry.notes || "No notes added")}</p>
+  </article>`;
+}
+
 function renderMonthlyRows() {
   const grouped = new Map();
   state.entries.forEach((entry) => {
@@ -653,16 +728,25 @@ function renderMonthlyRows() {
 }
 
 function renderQualityList(entries) {
-  const missingNotes = entries.filter((entry) => !entry.notes).length;
-  const missingSupervisor = entries.filter((entry) => entry.experienceType === "Supervised" && !entry.supervisorId).length;
-  const overrides = entries.filter((entry) => entry.manualOverride).length;
-  const other = entries.filter((entry) => entry.activityType === "Other").length;
+  const docs = documentationStats(entries);
   $("qualityList").innerHTML = [
-    ["Entries missing notes", missingNotes],
-    ["Supervised entries missing supervisor", missingSupervisor],
-    ["Entries with manual override", overrides],
-    ["Entries marked Other", other]
+    ["Entries missing notes", docs.missingNotes],
+    ["Supervised entries missing supervisor", docs.missingSupervisor],
+    ["Entries with manual override", docs.overrides],
+    ["Entries marked Other", docs.other]
   ].map(([label, value]) => `<div class="quality-item"><strong>${value}</strong><p class="muted">${label}</p></div>`).join("");
+}
+
+function documentationStats(entries) {
+  const noteWords = (entry) => entry.notes.trim().split(/\s+/).filter(Boolean).length;
+  return {
+    missingNotes: entries.filter((entry) => !entry.notes).length,
+    thinNotes: entries.filter((entry) => entry.notes && noteWords(entry) < 8).length,
+    detailedNotes: entries.filter((entry) => entry.notes && noteWords(entry) >= 8).length,
+    missingSupervisor: entries.filter((entry) => entry.experienceType === "Supervised" && !entry.supervisorId).length,
+    overrides: entries.filter((entry) => entry.manualOverride).length,
+    other: entries.filter((entry) => entry.activityType === "Other").length
+  };
 }
 
 function filteredEntries() {
@@ -833,7 +917,11 @@ async function saveSplitSession() {
 }
 
 function exportRows() {
-  return filteredEntries().map((entry) => ({
+  return rowsForEntries(filteredEntries());
+}
+
+function rowsForEntries(entries) {
+  return entries.map((entry) => ({
     Date: entry.date,
     Start: entry.startTime,
     End: entry.endTime,
@@ -866,9 +954,18 @@ function download(filename, content, type) {
 
 function exportCsv() {
   const rows = exportRows();
+  downloadCsvRows(rows, `fieldwork-flow-${todayIso()}.csv`);
+}
+
+function exportMonthlyReviewCsv() {
+  const key = $("dashboardMonth").value || currentMonth();
+  downloadCsvRows(rowsForEntries(entriesForMonth(key)), `fieldwork-flow-review-${key}.csv`);
+}
+
+function downloadCsvRows(rows, filename) {
   const headers = Object.keys(rows[0] || { Date: "", Start: "", End: "", Hours: "" });
   const csv = [headers.join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))].join("\n");
-  download(`fieldwork-flow-${todayIso()}.csv`, csv, "text/csv;charset=utf-8");
+  download(filename, csv, "text/csv;charset=utf-8");
 }
 
 function exportExcel() {
@@ -903,6 +1000,12 @@ function printSummary() {
 function formatDate(date) {
   const [year, month, day] = date.split("-");
   return `${month}/${day}/${year}`;
+}
+
+function monthLabel(key) {
+  const [year, month] = key.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
 function escapeHtml(value) {
@@ -1025,6 +1128,10 @@ $("resetFormBtn").addEventListener("click", resetForm);
 $("exportCsvBtn").addEventListener("click", exportCsv);
 $("exportExcelBtn").addEventListener("click", exportExcel);
 $("printBtn").addEventListener("click", printSummary);
+$("openMonthlyReviewBtn").addEventListener("click", openMonthlyReview);
+$("closeMonthlyReviewBtn").addEventListener("click", () => $("monthlyReviewDialog").close());
+$("reviewCsvBtn").addEventListener("click", exportMonthlyReviewCsv);
+$("reviewPrintBtn").addEventListener("click", printSummary);
 $("signInBtn").addEventListener("click", signIn);
 $("signUpBtn").addEventListener("click", signUp);
 $("signOutBtn").addEventListener("click", signOut);

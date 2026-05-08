@@ -166,6 +166,7 @@
                 <p class="eyebrow">Fieldwork path</p>
                 <h3 id="pathBestFit">Based on logged entries</h3>
               </div>
+              <button class="secondary-action" id="openMonthlyReviewBtn">Review month</button>
             </div>
             <div class="path-grid">
               <article class="path-card" id="standardPathCard">
@@ -293,6 +294,43 @@
           <button type="submit" class="primary-action" id="saveSplitBtn">Save segments</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="monthlyReviewDialog" class="review-dialog">
+      <section class="review-sheet">
+        <header class="review-header">
+          <div>
+            <p class="eyebrow">Monthly review</p>
+            <h2 id="reviewTitle">Month Review</h2>
+            <p class="muted">Supervisor meeting prep, not a replacement for the official BACB form.</p>
+          </div>
+          <button type="button" class="icon-button" id="closeMonthlyReviewBtn" aria-label="Close">x</button>
+        </header>
+
+        <div class="review-hero">
+          <div>
+            <span>Ready</span>
+            <strong id="reviewReadyState">Not yet</strong>
+          </div>
+          <div>
+            <span>Standard</span>
+            <strong id="reviewStandardState">Not yet</strong>
+          </div>
+          <div>
+            <span>Concentrated</span>
+            <strong id="reviewConcentratedState">Not yet</strong>
+          </div>
+        </div>
+
+        <div class="review-content" id="monthlyReviewContent"></div>
+
+        <p class="fine-print">Use these totals to complete the official BACB Monthly Fieldwork Verification Form with your supervisor. This app does not replace the official form.</p>
+
+        <div class="review-actions">
+          <button type="button" class="secondary-action" id="reviewCsvBtn">CSV</button>
+          <button type="button" class="secondary-action" id="reviewPrintBtn">Print Summary</button>
+        </div>
+      </section>
     </dialog>
 
     <template id="printTemplate">

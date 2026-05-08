@@ -662,6 +662,12 @@ dialog {
   box-shadow: 0 24px 80px rgba(29, 41, 51, 0.24);
 }
 
+dialog.review-dialog {
+  width: min(940px, calc(100% - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+}
+
 dialog::backdrop {
   background: rgba(29, 41, 51, 0.4);
 }
@@ -670,6 +676,123 @@ dialog::backdrop {
   display: grid;
   gap: 14px;
   padding: 18px;
+}
+
+.review-sheet {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  max-height: calc(100vh - 24px);
+  padding: 18px;
+}
+
+.review-header,
+.review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.review-hero div,
+.review-section,
+.review-entry-card,
+.review-empty {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.review-hero div {
+  padding: 14px;
+}
+
+.review-hero span,
+.review-rows span,
+.review-entry-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.review-hero strong {
+  display: block;
+  font-size: 1.45rem;
+  margin-top: 4px;
+}
+
+.review-content {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.review-section {
+  padding: 14px;
+}
+
+.review-section h3 {
+  margin-bottom: 10px;
+}
+
+.review-rows {
+  display: grid;
+  gap: 2px;
+}
+
+.review-rows div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
+}
+
+.review-rows div:last-child {
+  border-bottom: 0;
+}
+
+.review-helper {
+  margin-top: 8px;
+  font-size: 0.8rem;
+}
+
+.review-entry-list {
+  display: grid;
+  gap: 10px;
+}
+
+.review-entry-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  box-shadow: none;
+}
+
+.review-entry-card strong,
+.review-entry-card span {
+  display: block;
+}
+
+.review-entry-card p {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.review-empty {
+  color: var(--muted);
+  padding: 12px;
+}
+
+.review-actions {
+  padding-top: 12px;
 }
 
 .segment-card {
@@ -851,6 +974,50 @@ dialog::backdrop {
 
   .segment-card {
     grid-template-columns: 1fr;
+  }
+
+  dialog.review-dialog {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .review-sheet {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .review-header {
+    align-items: flex-start;
+  }
+
+  .review-hero {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 10px 0;
+  }
+
+  .review-hero div {
+    padding: 10px;
+  }
+
+  .review-hero span {
+    font-size: 0.7rem;
+  }
+
+  .review-hero strong {
+    font-size: 1.05rem;
+  }
+
+  .review-section {
+    padding: 12px;
+  }
+
+  .review-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .log-form,
