@@ -249,6 +249,11 @@ function toCloudEntry(entry) {
     experience_type: entry.experienceType,
     supervision_type: entry.supervisionType,
     supervision_method: entry.supervisionMethod,
+    supervision_start_time: entry.supervisionStartTime || null,
+    supervision_end_time: entry.supervisionEndTime || null,
+    supervised_hours: entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0),
+    individual_supervision_hours: entry.individualSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Individual" ? entry.durationHours : 0),
+    group_supervision_hours: entry.groupSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Group" ? entry.durationHours : 0),
     supervisor_id: entry.supervisorId || null,
     client_present: entry.clientPresent,
     supervisor_client_observation: entry.supervisorClientObservation,
@@ -272,6 +277,11 @@ function fromCloudEntry(row) {
     experienceType: row.experience_type,
     supervisionType: row.supervision_type,
     supervisionMethod: row.supervision_method,
+    supervisionStartTime: row.supervision_start_time ? row.supervision_start_time.slice(0, 5) : "",
+    supervisionEndTime: row.supervision_end_time ? row.supervision_end_time.slice(0, 5) : "",
+    supervisedHours: Number(row.supervised_hours ?? (row.experience_type === "Supervised" ? row.duration_hours : 0)),
+    individualSupervisionHours: Number(row.individual_supervision_hours ?? (row.experience_type === "Supervised" && row.supervision_type === "Individual" ? row.duration_hours : 0)),
+    groupSupervisionHours: Number(row.group_supervision_hours ?? (row.experience_type === "Supervised" && row.supervision_type === "Group" ? row.duration_hours : 0)),
     supervisorId: row.supervisor_id || "",
     clientPresent: row.client_present,
     supervisorClientObservation: row.supervisor_client_observation,
@@ -366,11 +376,14 @@ function renderClassification() {
   const category = $("manualOverride").checked ? $("activityCategory").value : activity.category || "Needs review";
   const experience = $("manualOverride").checked ? $("experienceType").value : supervisorPresent ? "Supervised" : activity.experience || "Needs review";
   const client = $("clientPresent").checked ? "Client present" : "No client";
+  const fieldworkHours = decimalHours($("startTime").value, $("endTime").value);
+  const supervisedHours = supervisorPresent ? currentSupervisedHours() : 0;
   $("classificationPanel").innerHTML = `
     <span class="pill ${badgeClassFor(category)}">${category}</span>
     <span class="pill ${badgeClassFor(experience)}">${experience}</span>
     <span class="pill other">${client}</span>
-    <span class="pill other">${formatHours(decimalHours($("startTime").value, $("endTime").value))} hours</span>
+    <span class="pill other">${formatHours(fieldworkHours)} hours</span>
+    ${supervisorPresent ? `<span class="pill supervised">${formatHours(supervisedHours)} supervised</span>` : ""}
   `;
 }
 
@@ -379,7 +392,24 @@ function syncConditionalFields() {
   $("supervisionFields").classList.toggle("visible", supervised);
   $("overrideFields").classList.toggle("visible", $("manualOverride").checked || getActivity().name === "Other");
   if (getActivity().name === "Other") $("manualOverride").checked = true;
+  syncSupervisionTimeFields();
   renderClassification();
+}
+
+function syncSupervisionTimeFields() {
+  const sameTime = $("supervisionSameTime").checked;
+  document.querySelectorAll(".supervision-time-field").forEach((field) => field.classList.toggle("hidden", sameTime));
+  if (sameTime) {
+    $("supervisionStartTime").value = $("startTime").value;
+    $("supervisionEndTime").value = $("endTime").value;
+  }
+}
+
+function currentSupervisedHours() {
+  const sameTime = $("supervisionSameTime").checked;
+  const start = sameTime ? $("startTime").value : $("supervisionStartTime").value;
+  const end = sameTime ? $("endTime").value : $("supervisionEndTime").value;
+  return decimalHours(start, end);
 }
 
 function hydrateFormDefaults() {
@@ -419,17 +449,26 @@ function collectEntry() {
   const activity = getActivity();
   const manual = $("manualOverride").checked || activity.name === "Other";
   const supervised = $("supervisorPresent").checked || activity.experience === "Supervised" || (manual && $("experienceType").value === "Supervised");
+  const durationHours = decimalHours($("startTime").value, $("endTime").value);
+  const supervisedHours = supervised ? Math.min(currentSupervisedHours(), durationHours) : 0;
+  const individualSupervisionHours = supervised && $("supervisionType").value === "Individual" ? supervisedHours : 0;
+  const groupSupervisionHours = supervised && $("supervisionType").value === "Group" ? supervisedHours : 0;
   return {
     id: $("editingId").value || crypto.randomUUID(),
     date: $("date").value,
     startTime: $("startTime").value,
     endTime: $("endTime").value,
-    durationHours: decimalHours($("startTime").value, $("endTime").value),
+    durationHours,
     activityType: activity.name,
     activityCategory: manual ? $("activityCategory").value : activity.category || "Restricted",
     experienceType: supervised ? "Supervised" : (manual ? $("experienceType").value : activity.experience || "Independent"),
     supervisionType: supervised ? $("supervisionType").value : "None",
     supervisionMethod: supervised ? $("supervisionMethod").value : "None",
+    supervisionStartTime: supervised ? ($("supervisionSameTime").checked ? $("startTime").value : $("supervisionStartTime").value) : "",
+    supervisionEndTime: supervised ? ($("supervisionSameTime").checked ? $("endTime").value : $("supervisionEndTime").value) : "",
+    supervisedHours,
+    individualSupervisionHours,
+    groupSupervisionHours,
     supervisorId: supervised ? $("supervisorId").value : "",
     clientPresent: $("clientPresent").checked,
     supervisorClientObservation: supervised ? $("supervisorClientObservation").checked : false,
@@ -482,16 +521,17 @@ function entriesForMonth(key = $("dashboardMonth").value || currentMonth()) {
 
 function totals(entries) {
   const sum = (filter) => entries.filter(filter).reduce((acc, entry) => acc + Number(entry.durationHours || 0), 0);
+  const sumValue = (selector) => entries.reduce((acc, entry) => acc + Number(selector(entry) || 0), 0);
   const total = sum(() => true);
   return {
     total,
-    independent: sum((entry) => entry.experienceType === "Independent"),
-    supervised: sum((entry) => entry.experienceType === "Supervised"),
+    independent: Math.max(total - sumValue((entry) => entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)), 0),
+    supervised: sumValue((entry) => entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)),
     restricted: sum((entry) => entry.activityCategory === "Restricted"),
     unrestricted: sum((entry) => entry.activityCategory === "Unrestricted"),
-    individualSupervision: sum((entry) => entry.experienceType === "Supervised" && entry.supervisionType === "Individual"),
-    groupSupervision: sum((entry) => entry.experienceType === "Supervised" && entry.supervisionType === "Group"),
-    contacts: entries.filter((entry) => entry.experienceType === "Supervised").length,
+    individualSupervision: sumValue((entry) => entry.individualSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Individual" ? entry.durationHours : 0)),
+    groupSupervision: sumValue((entry) => entry.groupSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Group" ? entry.durationHours : 0)),
+    contacts: entries.filter((entry) => Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)) > 0).length,
     observations: entries.filter((entry) => entry.supervisorClientObservation).length
   };
 }
@@ -702,7 +742,7 @@ function reviewEntryCard(entry) {
   return `<article class="review-entry-card">
     <div>
       <strong>${formatDate(entry.date)} - ${entry.activityType}</strong>
-      <span>${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hrs</span>
+      <span>${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hrs${entry.supervisedHours ? ` - ${formatHours(entry.supervisedHours)} supervised` : ""}</span>
     </div>
     <div class="classification-panel">
       <span class="pill ${badgeClassFor(entry.activityCategory)}">${entry.activityCategory}</span>
@@ -825,6 +865,9 @@ function editEntry(id) {
   $("supervisorId").value = entry.supervisorId || state.supervisors[0]?.id || "";
   $("supervisionType").value = entry.supervisionType === "None" ? "Individual" : entry.supervisionType;
   $("supervisionMethod").value = entry.supervisionMethod === "None" ? "In-person" : entry.supervisionMethod;
+  $("supervisionSameTime").checked = !entry.supervisionStartTime || (entry.supervisionStartTime === entry.startTime && entry.supervisionEndTime === entry.endTime);
+  $("supervisionStartTime").value = entry.supervisionStartTime || entry.startTime;
+  $("supervisionEndTime").value = entry.supervisionEndTime || entry.endTime;
   $("supervisorClientObservation").checked = entry.supervisorClientObservation;
   $("manualOverride").checked = entry.manualOverride;
   $("activityCategory").value = entry.activityCategory;
@@ -890,6 +933,11 @@ async function saveSplitSession() {
       experienceType: activity.experience || "Independent",
       supervisionType: supervised ? "Individual" : "None",
       supervisionMethod: supervised ? "In-person" : "None",
+      supervisionStartTime: supervised ? segment.querySelector(".segment-start").value : "",
+      supervisionEndTime: supervised ? segment.querySelector(".segment-end").value : "",
+      supervisedHours: supervised ? decimalHours(segment.querySelector(".segment-start").value, segment.querySelector(".segment-end").value) : 0,
+      individualSupervisionHours: supervised ? decimalHours(segment.querySelector(".segment-start").value, segment.querySelector(".segment-end").value) : 0,
+      groupSupervisionHours: 0,
       supervisorId: supervised ? $("supervisorId").value : "",
       clientPresent: activity.clientPresent,
       supervisorClientObservation: activity.name.includes("Observation"),
@@ -931,6 +979,12 @@ function rowsForEntries(entries) {
     Experience: entry.experienceType,
     "Supervision Type": entry.supervisionType,
     "Supervision Method": entry.supervisionMethod,
+    "Supervision Start": entry.supervisionStartTime,
+    "Supervision End": entry.supervisionEndTime,
+    "Supervised Hours": entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0),
+    "Individual Supervision Hours": entry.individualSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Individual" ? entry.durationHours : 0),
+    "Group Supervision Hours": entry.groupSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Group" ? entry.durationHours : 0),
+    "Independent Hours": Math.max(Number(entry.durationHours || 0) - Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)), 0),
     Supervisor: supervisorName(entry.supervisorId),
     "Client Present": entry.clientPresent ? "Yes" : "No",
     "Supervisor-Client Observation": entry.supervisorClientObservation ? "Yes" : "No",
@@ -981,9 +1035,9 @@ function buildPrintSummary() {
   const t = totals(monthEntries);
   return `
     <h2>${key}</h2>
-    <p>Total: ${formatHours(t.total)} - Restricted: ${formatHours(t.restricted)} - Unrestricted: ${formatHours(t.unrestricted)} - Supervised: ${formatHours(t.supervised)} - Contacts: ${t.contacts} - Observations: ${t.observations}</p>
-    <table><thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Activity</th><th>Category</th><th>Experience</th><th>Supervisor</th><th>Notes</th></tr></thead>
-    <tbody>${monthEntries.map((entry) => `<tr><td>${entry.date}</td><td>${entry.startTime}-${entry.endTime}</td><td>${formatHours(entry.durationHours)}</td><td>${escapeHtml(entry.activityType)}</td><td>${entry.activityCategory}</td><td>${entry.experienceType}</td><td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td><td>${escapeHtml(entry.notes || "")}</td></tr>`).join("")}</tbody></table>
+    <p>Total: ${formatHours(t.total)} - Restricted: ${formatHours(t.restricted)} - Unrestricted: ${formatHours(t.unrestricted)} - Supervised: ${formatHours(t.supervised)} - Independent: ${formatHours(t.independent)} - Contacts: ${t.contacts} - Observations: ${t.observations}</p>
+    <table><thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Supervision</th><th>Sup. Hours</th><th>Activity</th><th>Category</th><th>Experience</th><th>Supervisor</th><th>Notes</th></tr></thead>
+    <tbody>${monthEntries.map((entry) => `<tr><td>${entry.date}</td><td>${entry.startTime}-${entry.endTime}</td><td>${formatHours(entry.durationHours)}</td><td>${entry.supervisionStartTime ? `${entry.supervisionStartTime}-${entry.supervisionEndTime}` : ""}</td><td>${formatHours(entry.supervisedHours || 0)}</td><td>${escapeHtml(entry.activityType)}</td><td>${entry.activityCategory}</td><td>${entry.experienceType}</td><td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td><td>${escapeHtml(entry.notes || "")}</td></tr>`).join("")}</tbody></table>
   `;
 }
 
@@ -1057,7 +1111,7 @@ document.addEventListener("click", async (event) => {
 
 document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
 
-["startTime", "endTime", "supervisorPresent", "clientPresent", "manualOverride", "activityCategory", "experienceType"].forEach((id) => {
+["startTime", "endTime", "supervisorPresent", "clientPresent", "manualOverride", "activityCategory", "experienceType", "supervisionSameTime", "supervisionStartTime", "supervisionEndTime", "supervisionType"].forEach((id) => {
   $(id).addEventListener("input", syncConditionalFields);
   $(id).addEventListener("change", syncConditionalFields);
 });

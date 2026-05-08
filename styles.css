@@ -397,6 +397,10 @@ textarea {
   display: grid;
 }
 
+.supervision-time-field.hidden {
+  display: none;
+}
+
 .full {
   grid-column: 1 / -1;
 }
