@@ -22,7 +22,6 @@
           </form>
           <div class="auth-status" id="authStatus">Local only</div>
           <button class="ghost-action hidden" id="signOutBtn">Sign out</button>
-          <button class="icon-button" id="printSummaryBtn" title="Print monthly summary" aria-label="Print monthly summary">P</button>
         </div>
       </header>
 
@@ -34,7 +33,7 @@
               <h2 id="todayStatus">No entry logged today</h2>
               <p class="muted" id="profileStatus">Local profile ready</p>
             </div>
-            <button class="primary-action" id="focusLogBtn">Log Activity</button>
+            <div class="path-mini" id="homePathStatus"></div>
           </div>
 
           <div class="metric-strip">
@@ -160,6 +159,29 @@
             <article class="stat-card"><span>Unrestricted</span><strong id="dashUnrestricted">0.00</strong></article>
             <article class="stat-card"><span>Contacts</span><strong id="dashContacts">0</strong></article>
           </div>
+
+          <section class="path-panel">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Fieldwork path</p>
+                <h3 id="pathBestFit">Based on logged entries</h3>
+              </div>
+            </div>
+            <div class="path-grid">
+              <article class="path-card" id="standardPathCard">
+                <span>Standard</span>
+                <strong id="standardPathState">Not yet</strong>
+                <p id="standardPathHint">Add monthly entries to check this path.</p>
+              </article>
+              <article class="path-card" id="concentratedPathCard">
+                <span>Concentrated</span>
+                <strong id="concentratedPathState">Not yet</strong>
+                <p id="concentratedPathHint">Add monthly entries to check this path.</p>
+              </article>
+            </div>
+            <div class="path-detail" id="pathDetail"></div>
+            <p class="fine-print">Based on logged entries only. Confirm requirements with your supervisor and the current BACB handbook.</p>
+          </section>
 
           <div class="ratio-stack">
             <div class="ratio-row"><span>Current supervision percentage</span><strong id="dashSupervisionPct">0%</strong><div><i id="supervisionBar"></i></div></div>

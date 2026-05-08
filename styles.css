@@ -139,6 +139,7 @@ h3 {
 .metric-strip article,
 .log-form,
 .stat-card,
+.path-panel,
 .two-column > section,
 .supervisor-form,
 .settings-grid,
@@ -154,6 +155,30 @@ h3 {
 
 .hero-panel {
   padding: 20px;
+}
+
+.path-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.path-chip {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.path-chip.yes {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.path-chip.not-yet {
+  background: #ece8df;
+  color: var(--muted);
 }
 
 .metric-strip {
@@ -411,6 +436,11 @@ textarea {
   padding: 0 14px;
 }
 
+.danger-action {
+  color: var(--red);
+  border-color: rgba(164, 79, 95, 0.26);
+}
+
 .icon-button {
   width: 44px;
   padding: 0;
@@ -442,6 +472,13 @@ textarea {
   gap: 10px;
 }
 
+.entry-card header > div:last-child,
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .entry-card footer {
   display: flex;
   gap: 8px;
@@ -459,6 +496,84 @@ textarea {
   gap: 14px;
   margin: 14px 0;
   padding: 16px;
+}
+
+.path-panel {
+  margin: 14px 0;
+  padding: 16px;
+}
+
+.path-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.path-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.path-card span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.path-card strong {
+  font-size: 1.45rem;
+}
+
+.path-card p,
+.fine-print {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.path-card.yes strong {
+  color: var(--green);
+}
+
+.path-card.not-yet strong {
+  color: var(--muted);
+}
+
+.path-detail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.path-detail div {
+  background: #f4f1ea;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.path-detail span,
+.path-detail strong {
+  display: block;
+}
+
+.path-detail span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.path-detail strong {
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.fine-print {
+  margin-top: 10px;
 }
 
 .ratio-row {
@@ -609,8 +724,34 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 
+  .form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-row label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .toggle-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .switch-row {
+    min-height: 62px;
+    padding: 9px;
+    align-items: flex-start;
+    flex-direction: column;
+    font-size: 0.76rem;
+  }
+
+  .switch-row input {
+    align-self: flex-end;
+  }
+
   .metric-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .metric-strip article,
@@ -635,8 +776,9 @@ dialog::backdrop {
   }
 
   .activity-card {
-    min-height: 88px;
+    min-height: 64px;
     padding: 10px;
+    gap: 8px;
   }
 
   .activity-card strong {
@@ -652,6 +794,16 @@ dialog::backdrop {
   .auth-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .hero-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .path-mini {
+    justify-content: flex-start;
   }
 
   .auth-form input {
@@ -710,13 +862,7 @@ dialog::backdrop {
   }
 
   .hero-panel {
-    padding: 14px;
-  }
-
-  .hero-panel .primary-action,
-  .section-heading .secondary-action,
-  .sticky-actions button {
-    width: 100%;
+    padding: 12px;
   }
 
   .sticky-actions {
@@ -726,13 +872,48 @@ dialog::backdrop {
     border-top: 1px solid var(--line);
   }
 
+  .sticky-actions button {
+    flex: 1;
+  }
+
+  .section-heading .secondary-action {
+    width: auto;
+  }
+
   .entry-card header {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .entry-card header button {
+  .entry-card header > div:last-child,
+  .row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .entry-card header button,
+  .row-actions button {
     width: 100%;
+  }
+
+  .path-panel {
+    padding: 12px;
+  }
+
+  .path-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .path-card {
+    padding: 12px;
+  }
+
+  .path-card strong {
+    font-size: 1.25rem;
+  }
+
+  .path-detail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .table-wrap {
@@ -797,16 +978,16 @@ dialog::backdrop {
 }
 
 @media (max-width: 420px) {
-  .metric-strip {
-    grid-template-columns: 1fr;
-  }
-
   .activity-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tab {
     font-size: 0.72rem;
+  }
+
+  .path-detail {
+    grid-template-columns: 1fr;
   }
 }
 

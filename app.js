@@ -225,6 +225,12 @@ async function deleteCloudSupervisor(id) {
   throwIfSupabaseError(result.error);
 }
 
+async function deleteCloudEntry(id) {
+  if (!cloud.user) return;
+  const result = await cloud.client.from("fieldwork_entries").delete().eq("id", id);
+  throwIfSupabaseError(result.error);
+}
+
 async function saveCloudSettings() {
   if (!cloud.user) return;
   await ensureCloudProfile();
@@ -483,9 +489,70 @@ function totals(entries) {
     supervised: sum((entry) => entry.experienceType === "Supervised"),
     restricted: sum((entry) => entry.activityCategory === "Restricted"),
     unrestricted: sum((entry) => entry.activityCategory === "Unrestricted"),
+    individualSupervision: sum((entry) => entry.experienceType === "Supervised" && entry.supervisionType === "Individual"),
+    groupSupervision: sum((entry) => entry.experienceType === "Supervised" && entry.supervisionType === "Group"),
     contacts: entries.filter((entry) => entry.experienceType === "Supervised").length,
     observations: entries.filter((entry) => entry.supervisorClientObservation).length
   };
+}
+
+function evaluatePath(entries, type) {
+  const t = totals(entries);
+  const isConcentrated = type === "concentrated";
+  const requiredPct = isConcentrated ? 10 : 5;
+  const requiredContacts = isConcentrated ? 6 : 4;
+  const requiredSupervised = Math.round((t.total * requiredPct / 100) * 100) / 100;
+  const supervisionPct = percent(t.supervised, t.total);
+  const checks = [
+    {
+      key: "hours",
+      label: "Monthly hours",
+      met: t.total >= 20 && t.total <= 130,
+      need: t.total < 20 ? `${formatHours(20 - t.total)} more total hours` : t.total > 130 ? "monthly hours are over 130" : ""
+    },
+    {
+      key: "supervision",
+      label: "Supervision",
+      met: t.total > 0 && t.supervised >= requiredSupervised,
+      need: t.total ? `${formatHours(Math.max(requiredSupervised - t.supervised, 0))} more supervised hours` : "log fieldwork hours first"
+    },
+    {
+      key: "contacts",
+      label: "Contacts",
+      met: t.contacts >= requiredContacts,
+      need: `${Math.max(requiredContacts - t.contacts, 0)} more supervision contact${requiredContacts - t.contacts === 1 ? "" : "s"}`
+    },
+    {
+      key: "observation",
+      label: "Client observation",
+      met: t.observations >= 1,
+      need: "1 supervisor-client observation"
+    },
+    {
+      key: "individual",
+      label: "Individual balance",
+      met: t.supervised === 0 || t.groupSupervision <= t.individualSupervision,
+      need: "more individual than group supervision"
+    }
+  ];
+  const missing = checks.filter((check) => !check.met);
+  return {
+    type,
+    yes: missing.length === 0,
+    totals: t,
+    requiredPct,
+    requiredContacts,
+    requiredSupervised,
+    supervisionPct,
+    missing,
+    checks
+  };
+}
+
+function pathSummary(path) {
+  if (path.yes) return "Monthly requirements shown here are met.";
+  const needs = path.missing.map((item) => item.need).filter(Boolean).slice(0, 2);
+  return needs.length ? needs.join(" + ") : "Keep logging this month.";
 }
 
 function renderHome() {
@@ -498,6 +565,7 @@ function renderHome() {
   $("monthHours").textContent = formatHours(monthTotals.total);
   $("supervisionPct").textContent = `${percent(monthTotals.supervised, monthTotals.total)}%`;
   $("unrestrictedPct").textContent = `${percent(monthTotals.unrestricted, monthTotals.total)}%`;
+  renderHomePath(monthEntries);
 }
 
 function renderRecentEntries() {
@@ -509,7 +577,10 @@ function entryCard(entry) {
   return `<article class="entry-card">
     <header>
       <div><strong>${formatDate(entry.date)} - ${entry.activityType}</strong><p class="muted">${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hours</p></div>
-      <button class="ghost-action" data-edit="${entry.id}">Edit</button>
+      <div>
+        <button class="ghost-action" data-edit="${entry.id}">Edit</button>
+        <button class="ghost-action danger-action" data-delete-entry="${entry.id}">Delete</button>
+      </div>
     </header>
     <p>${escapeHtml(entry.notes || "No notes added")}</p>
     <footer>
@@ -537,6 +608,34 @@ function renderDashboard() {
   $("unrestrictedBar").style.width = `${Math.min(unrestricted, 100)}%`;
   renderMonthlyRows();
   renderQualityList(monthEntries);
+  renderPathPanel(monthEntries);
+}
+
+function renderHomePath(entries) {
+  const standard = evaluatePath(entries, "standard");
+  const concentrated = evaluatePath(entries, "concentrated");
+  $("homePathStatus").innerHTML = `
+    <span class="path-chip ${standard.yes ? "yes" : "not-yet"}">Standard: ${standard.yes ? "Yes" : "Not yet"}</span>
+    <span class="path-chip ${concentrated.yes ? "yes" : "not-yet"}">Concentrated: ${concentrated.yes ? "Yes" : "Not yet"}</span>
+  `;
+}
+
+function renderPathPanel(entries) {
+  const standard = evaluatePath(entries, "standard");
+  const concentrated = evaluatePath(entries, "concentrated");
+  setPathCard("standard", standard);
+  setPathCard("concentrated", concentrated);
+  const bestFit = concentrated.yes ? "This month can be tracked as concentrated based on these entries." : standard.yes ? "This month can be tracked as standard based on these entries." : "Not yet for standard or concentrated.";
+  $("pathBestFit").textContent = bestFit;
+  const focused = concentrated.yes ? concentrated : standard.yes ? standard : concentrated;
+  $("pathDetail").innerHTML = focused.checks.map((check) => `<div><span>${check.label}</span><strong>${check.met ? "Yes" : "Not yet"}</strong></div>`).join("");
+}
+
+function setPathCard(prefix, path) {
+  $(`${prefix}PathState`).textContent = path.yes ? "Yes" : "Not yet";
+  $(`${prefix}PathHint`).textContent = pathSummary(path);
+  $(`${prefix}PathCard`).classList.toggle("yes", path.yes);
+  $(`${prefix}PathCard`).classList.toggle("not-yet", !path.yes);
 }
 
 function renderMonthlyRows() {
@@ -590,9 +689,27 @@ function renderEntriesTable() {
     <td data-label="Experience"><span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span></td>
     <td data-label="Supervisor">${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td>
     <td data-label="Notes">${escapeHtml(entry.notes || "")}</td>
-    <td data-label="Action"><button class="ghost-action" data-edit="${entry.id}">Edit</button></td>
+    <td data-label="Action"><div class="row-actions"><button class="ghost-action" data-edit="${entry.id}">Edit</button><button class="ghost-action danger-action" data-delete-entry="${entry.id}">Delete</button></div></td>
   </tr>`).join("");
   $("entryRows").innerHTML = rows || `<tr><td data-label="Entries" colspan="9">No entries match these filters.</td></tr>`;
+}
+
+async function deleteEntry(id) {
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) return;
+  const ok = confirm(`Delete ${entry.activityType} from ${formatDate(entry.date)}? This cannot be undone.`);
+  if (!ok) return;
+  state.entries = state.entries.filter((item) => item.id !== id);
+  saveState();
+  renderAll();
+  if (cloud.user) {
+    try {
+      await deleteCloudEntry(id);
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Delete error: ${error.message}`);
+    }
+  }
 }
 
 function renderSettings() {
@@ -812,6 +929,9 @@ document.addEventListener("click", async (event) => {
   const editButton = event.target.closest("[data-edit]");
   if (editButton) editEntry(editButton.dataset.edit);
 
+  const deleteEntryButton = event.target.closest("[data-delete-entry]");
+  if (deleteEntryButton) await deleteEntry(deleteEntryButton.dataset.deleteEntry);
+
   const removeSegment = event.target.closest(".segment-remove");
   if (removeSegment) removeSegment.closest(".segment-card").remove();
 
@@ -901,12 +1021,10 @@ $("supervisorForm").addEventListener("submit", async (event) => {
   $(id).addEventListener("change", renderAll);
 });
 
-$("focusLogBtn").addEventListener("click", () => switchView("quickLog"));
 $("resetFormBtn").addEventListener("click", resetForm);
 $("exportCsvBtn").addEventListener("click", exportCsv);
 $("exportExcelBtn").addEventListener("click", exportExcel);
 $("printBtn").addEventListener("click", printSummary);
-$("printSummaryBtn").addEventListener("click", printSummary);
 $("signInBtn").addEventListener("click", signIn);
 $("signUpBtn").addEventListener("click", signUp);
 $("signOutBtn").addEventListener("click", signOut);
