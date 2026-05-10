@@ -804,6 +804,36 @@ function renderTotalHours() {
   $("totalHoursRows").innerHTML = rows || `<tr><td data-label="Total hours" colspan="9">No fieldwork hours logged yet.</td></tr>`;
 }
 
+function totalHoursExportRows() {
+  const rows = groupedEntriesByMonth().reverse().map(([key, entries]) => {
+    const t = totals(entries);
+    return {
+      Month: key,
+      "Fieldwork Hours": formatHours(t.total),
+      "Independent Hours": formatHours(t.independent),
+      "Supervised Hours": formatHours(t.supervised),
+      "Unrestricted Hours": formatHours(t.unrestricted),
+      "Supervision Contacts": t.contacts,
+      "Client Observations": t.observations,
+      "Supervision %": `${percent(t.supervised, t.total)}%`,
+      "Group Supervision %": `${percent(t.groupSupervision, t.supervised)}%`
+    };
+  });
+  const all = totals(state.entries);
+  rows.push({
+    Month: "TOTAL",
+    "Fieldwork Hours": formatHours(all.total),
+    "Independent Hours": formatHours(all.independent),
+    "Supervised Hours": formatHours(all.supervised),
+    "Unrestricted Hours": formatHours(all.unrestricted),
+    "Supervision Contacts": all.contacts,
+    "Client Observations": all.observations,
+    "Supervision %": `${percent(all.supervised, all.total)}%`,
+    "Group Supervision %": `${percent(all.groupSupervision, all.supervised)}%`
+  });
+  return rows;
+}
+
 function renderQualityList(entries) {
   const docs = documentationStats(entries);
   $("qualityList").innerHTML = [
@@ -1066,6 +1096,20 @@ function exportExcel() {
   download(`fieldwork-flow-${todayIso()}.xls`, table, "application/vnd.ms-excel;charset=utf-8");
 }
 
+function exportTotalHoursExcel() {
+  const rows = totalHoursExportRows();
+  const headers = Object.keys(rows[0] || {
+    Month: "",
+    "Fieldwork Hours": "",
+    "Independent Hours": "",
+    "Supervised Hours": "",
+    "Unrestricted Hours": ""
+  });
+  const title = `<h1>Fieldwork Flow Total Hours</h1><p>Exported ${todayIso()}</p>`;
+  const table = `${title}<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  download(`fieldwork-flow-total-hours-${todayIso()}.xls`, table, "application/vnd.ms-excel;charset=utf-8");
+}
+
 function buildPrintSummary() {
   const key = $("dashboardMonth").value || currentMonth();
   const monthEntries = entriesForMonth(key);
@@ -1218,6 +1262,7 @@ $("supervisorForm").addEventListener("submit", async (event) => {
 $("resetFormBtn").addEventListener("click", resetForm);
 $("exportCsvBtn").addEventListener("click", exportCsv);
 $("exportExcelBtn").addEventListener("click", exportExcel);
+$("exportTotalHoursExcelBtn").addEventListener("click", exportTotalHoursExcel);
 $("printBtn").addEventListener("click", printSummary);
 $("openMonthlyReviewBtn").addEventListener("click", openMonthlyReview);
 $("closeMonthlyReviewBtn").addEventListener("click", () => $("monthlyReviewDialog").close());
