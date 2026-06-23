@@ -1064,7 +1064,7 @@ function rowsForEntries(entries) {
 }
 
 function download(filename, content, type) {
-  const blob = new Blob([content], { type });
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -1091,23 +1091,137 @@ function downloadCsvRows(rows, filename) {
 
 function exportExcel() {
   const rows = exportRows();
-  const headers = Object.keys(rows[0] || { Date: "", Start: "", End: "", Hours: "" });
-  const table = `<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  download(`fieldwork-flow-${todayIso()}.xls`, table, "application/vnd.ms-excel;charset=utf-8");
+  downloadXlsx(`fieldwork-flow-${todayIso()}.xlsx`, "Entries", rows);
 }
 
 function exportTotalHoursExcel() {
   const rows = totalHoursExportRows();
-  const headers = Object.keys(rows[0] || {
-    Month: "",
-    "Fieldwork Hours": "",
-    "Independent Hours": "",
-    "Supervised Hours": "",
-    "Unrestricted Hours": ""
+  downloadXlsx(`fieldwork-flow-total-hours-${todayIso()}.xlsx`, "Total Hours", rows);
+}
+
+function downloadXlsx(filename, sheetName, rows) {
+  const headers = Object.keys(rows[0] || { Empty: "" });
+  const worksheetRows = [headers, ...rows.map((row) => headers.map((header) => row[header] ?? ""))];
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="${escapeXml(sheetName).slice(0, 31)}" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>`,
+    "xl/worksheets/sheet1.xml": buildWorksheetXml(worksheetRows)
+  };
+  download(filename, buildZip(files), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+
+function buildWorksheetXml(rows) {
+  const columnWidths = rows[0].map((_, index) => {
+    const width = Math.min(Math.max(...rows.map((row) => String(row[index] ?? "").length), 10) + 2, 42);
+    return `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
+  }).join("");
+  const rowXml = rows.map((row, rowIndex) => {
+    const cells = row.map((value, colIndex) => {
+      const ref = `${columnName(colIndex + 1)}${rowIndex + 1}`;
+      const numeric = typeof value === "number" || (value !== "" && !String(value).endsWith("%") && !Number.isNaN(Number(value)) && /^-?\d+(\.\d+)?$/.test(String(value)));
+      if (numeric) return `<c r="${ref}"${rowIndex === 0 ? ' s="1"' : ""}><v>${Number(value)}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"${rowIndex === 0 ? ' s="1"' : ""}><is><t>${escapeXml(value)}</t></is></c>`;
+    }).join("");
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols>${columnWidths}</cols>
+  <sheetData>${rowXml}</sheetData>
+</worksheet>`;
+}
+
+function columnName(index) {
+  let name = "";
+  while (index > 0) {
+    const mod = (index - 1) % 26;
+    name = String.fromCharCode(65 + mod) + name;
+    index = Math.floor((index - mod) / 26);
+  }
+  return name;
+}
+
+function buildZip(files) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  Object.entries(files).forEach(([name, content]) => {
+    const nameBytes = encoder.encode(name);
+    const data = encoder.encode(content);
+    const crc = crc32(data);
+    const local = zipHeader(0x04034b50, [
+      [20, 2], [0, 2], [0, 2], [0, 2], [0, 2], [crc, 4], [data.length, 4], [data.length, 4], [nameBytes.length, 2], [0, 2]
+    ]);
+    chunks.push(local, nameBytes, data);
+    central.push(zipHeader(0x02014b50, [
+      [20, 2], [20, 2], [0, 2], [0, 2], [0, 2], [0, 2], [crc, 4], [data.length, 4], [data.length, 4],
+      [nameBytes.length, 2], [0, 2], [0, 2], [0, 2], [0, 2], [0, 4], [offset, 4]
+    ]), nameBytes);
+    offset += local.length + nameBytes.length + data.length;
   });
-  const title = `<h1>Fieldwork Flow Total Hours</h1><p>Exported ${todayIso()}</p>`;
-  const table = `${title}<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  download(`fieldwork-flow-total-hours-${todayIso()}.xls`, table, "application/vnd.ms-excel;charset=utf-8");
+  const centralSize = central.reduce((sum, chunk) => sum + chunk.length, 0);
+  const end = zipHeader(0x06054b50, [[0, 2], [0, 2], [Object.keys(files).length, 2], [Object.keys(files).length, 2], [centralSize, 4], [offset, 4], [0, 2]]);
+  return new Blob([...chunks, ...central, end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function zipHeader(signature, fields) {
+  const length = 4 + fields.reduce((sum, [, size]) => sum + size, 0);
+  const bytes = new Uint8Array(length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, signature, true);
+  let offset = 4;
+  fields.forEach(([value, size]) => {
+    if (size === 2) view.setUint16(offset, value, true);
+    if (size === 4) view.setUint32(offset, value >>> 0, true);
+    offset += size;
+  });
+  return bytes;
+}
+
+function crc32(data) {
+  let crc = -1;
+  for (let i = 0; i < data.length; i += 1) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ data[i]) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function escapeXml(value) {
+  return String(value ?? "").replace(/[<>&'"]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[char]);
 }
 
 function buildPrintSummary() {
