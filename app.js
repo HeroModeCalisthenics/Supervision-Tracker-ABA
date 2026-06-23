@@ -808,29 +808,38 @@ function renderTotalHours() {
 function totalHoursExportRows() {
   const rows = groupedEntriesByMonth().reverse().map(([key, entries]) => {
     const t = totals(entries);
+    const [year, month] = key.split("-");
+    const standard = evaluatePath(entries, "standard");
+    const concentrated = evaluatePath(entries, "concentrated");
     return {
-      Month: key,
-      "Fieldwork Hours": formatHours(t.total),
-      "Independent Hours": formatHours(t.independent),
-      "Supervised Hours": formatHours(t.supervised),
-      "Unrestricted Hours": formatHours(t.unrestricted),
-      "Supervision Contacts": t.contacts,
-      "Client Observations": t.observations,
-      "Supervision %": `${percent(t.supervised, t.total)}%`,
-      "Group Supervision %": `${percent(t.groupSupervision, t.supervised)}%`
+      Year: year,
+      Month: monthName(month),
+      "# of Fieldwork Hours": formatHours(t.total),
+      "# of Independent Hours": formatHours(t.independent),
+      "# of Supervised Hours": formatHours(t.supervised),
+      "# of Unrestricted Hours": formatHours(t.unrestricted),
+      "# of Supervision Contacts": t.contacts,
+      "# of Client Observations": t.observations,
+      "% of Fieldwork Supervised": `${percent(t.supervised, t.total)}%`,
+      "% of Group Supervision": `${percent(t.groupSupervision, t.supervised)}%`,
+      Standard: standard.yes ? "Yes" : "Not yet",
+      Concentrated: concentrated.yes ? "Yes" : "Not yet"
     };
   });
   const all = totals(state.entries);
   rows.push({
+    Year: "TOTAL",
     Month: "TOTAL",
-    "Fieldwork Hours": formatHours(all.total),
-    "Independent Hours": formatHours(all.independent),
-    "Supervised Hours": formatHours(all.supervised),
-    "Unrestricted Hours": formatHours(all.unrestricted),
-    "Supervision Contacts": all.contacts,
-    "Client Observations": all.observations,
-    "Supervision %": `${percent(all.supervised, all.total)}%`,
-    "Group Supervision %": `${percent(all.groupSupervision, all.supervised)}%`
+    "# of Fieldwork Hours": formatHours(all.total),
+    "# of Independent Hours": formatHours(all.independent),
+    "# of Supervised Hours": formatHours(all.supervised),
+    "# of Unrestricted Hours": formatHours(all.unrestricted),
+    "# of Supervision Contacts": all.contacts,
+    "# of Client Observations": all.observations,
+    "% of Fieldwork Supervised": `${percent(all.supervised, all.total)}%`,
+    "% of Group Supervision": `${percent(all.groupSupervision, all.supervised)}%`,
+    Standard: "",
+    Concentrated: ""
   });
   return rows;
 }
@@ -1268,6 +1277,11 @@ function monthLabel(key) {
   const [year, month] = key.split("-");
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function monthName(month) {
+  const date = new Date(2026, Number(month) - 1, 1);
+  return date.toLocaleDateString(undefined, { month: "long" });
 }
 
 function escapeHtml(value) {
