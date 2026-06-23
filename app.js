@@ -619,6 +619,7 @@ function entryCard(entry) {
       <div><strong>${formatDate(entry.date)} - ${entry.activityType}</strong><p class="muted">${entry.startTime}-${entry.endTime} - ${formatHours(entry.durationHours)} hours</p></div>
       <div>
         <button class="ghost-action" data-edit="${entry.id}">Edit</button>
+        <button class="ghost-action" data-copy-entry="${entry.id}">Copy</button>
         <button class="ghost-action danger-action" data-delete-entry="${entry.id}">Delete</button>
       </div>
     </header>
@@ -880,7 +881,7 @@ function renderEntriesTable() {
     <td data-label="Experience"><span class="pill ${badgeClassFor(entry.experienceType)}">${entry.experienceType}</span></td>
     <td data-label="Supervisor">${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td>
     <td data-label="Notes">${escapeHtml(entry.notes || "")}</td>
-    <td data-label="Action"><div class="row-actions"><button class="ghost-action" data-edit="${entry.id}">Edit</button><button class="ghost-action danger-action" data-delete-entry="${entry.id}">Delete</button></div></td>
+    <td data-label="Action"><div class="row-actions"><button class="ghost-action" data-edit="${entry.id}">Edit</button><button class="ghost-action" data-copy-entry="${entry.id}">Copy</button><button class="ghost-action danger-action" data-delete-entry="${entry.id}">Delete</button></div></td>
   </tr>`).join("");
   $("entryRows").innerHTML = rows || `<tr><td data-label="Entries" colspan="9">No entries match these filters.</td></tr>`;
 }
@@ -922,8 +923,18 @@ function renderSupervisors() {
 function editEntry(id) {
   const entry = state.entries.find((item) => item.id === id);
   if (!entry) return;
+  loadEntryIntoForm(entry, { copy: false });
+}
+
+function copyEntry(id) {
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) return;
+  loadEntryIntoForm({ ...entry, id: "", date: todayIso(), createdAt: "", updatedAt: "" }, { copy: true });
+}
+
+function loadEntryIntoForm(entry, { copy }) {
   selectedActivity = entry.activityType;
-  $("editingId").value = entry.id;
+  $("editingId").value = copy ? "" : entry.id;
   $("date").value = entry.date;
   $("startTime").value = entry.startTime;
   $("endTime").value = entry.endTime;
@@ -942,6 +953,7 @@ function editEntry(id) {
   $("overrideReason").value = entry.overrideReason || "";
   $("setting").value = entry.setting || "";
   $("notes").value = entry.notes || "";
+  $("saveBtn").textContent = copy ? "Save copy" : "Save entry";
   switchView("quickLog");
   syncConditionalFields();
   renderActivityButtons();
@@ -950,6 +962,7 @@ function editEntry(id) {
 function resetForm() {
   $("entryForm").reset();
   $("editingId").value = "";
+  $("saveBtn").textContent = "Save entry";
   selectedActivity = activityTypes[0].name;
   hydrateFormDefaults();
   renderActivityButtons();
@@ -1280,6 +1293,9 @@ document.addEventListener("click", async (event) => {
 
   const editButton = event.target.closest("[data-edit]");
   if (editButton) editEntry(editButton.dataset.edit);
+
+  const copyEntryButton = event.target.closest("[data-copy-entry]");
+  if (copyEntryButton) copyEntry(copyEntryButton.dataset.copyEntry);
 
   const deleteEntryButton = event.target.closest("[data-delete-entry]");
   if (deleteEntryButton) await deleteEntry(deleteEntryButton.dataset.deleteEntry);
