@@ -938,7 +938,7 @@ function editEntry(id) {
 function copyEntry(id) {
   const entry = state.entries.find((item) => item.id === id);
   if (!entry) return;
-  loadEntryIntoForm({ ...entry, id: "", date: todayIso(), createdAt: "", updatedAt: "" }, { copy: true });
+  loadEntryIntoForm({ ...entry, id: "", date: todayIso(), parentSessionId: "", createdAt: "", updatedAt: "" }, { copy: true });
 }
 
 function loadEntryIntoForm(entry, { copy }) {
@@ -1058,6 +1058,7 @@ function exportRows() {
 }
 
 function rowsForEntries(entries) {
+  const splitSessionLabels = buildSplitSessionLabels(entries);
   return entries.map((entry) => ({
     Date: entry.date,
     Start: entry.startTime,
@@ -1081,8 +1082,13 @@ function rowsForEntries(entries) {
     Notes: entry.notes,
     "Manual Override": entry.manualOverride ? "Yes" : "No",
     "Override Reason": entry.overrideReason,
-    "Parent Session": entry.parentSessionId
+    "Split Session": splitSessionLabels.get(entry.parentSessionId) || ""
   }));
+}
+
+function buildSplitSessionLabels(entries) {
+  const parentIds = [...new Set(entries.map((entry) => entry.parentSessionId).filter(Boolean))];
+  return new Map(parentIds.map((id, index) => [id, `Split Session ${index + 1}`]));
 }
 
 function download(filename, content, type) {
