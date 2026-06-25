@@ -471,7 +471,7 @@ function collectEntry() {
     groupSupervisionHours,
     supervisorId: supervised ? $("supervisorId").value : "",
     clientPresent: $("clientPresent").checked,
-    supervisorClientObservation: supervised ? $("supervisorClientObservation").checked : false,
+    supervisorClientObservation: supervised && supervisedHours > 0 && $("clientPresent").checked,
     setting: $("setting").value.trim(),
     notes: $("notes").value.trim(),
     manualOverride: manual,
@@ -532,7 +532,7 @@ function totals(entries) {
     individualSupervision: sumValue((entry) => entry.individualSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Individual" ? entry.durationHours : 0)),
     groupSupervision: sumValue((entry) => entry.groupSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Group" ? entry.durationHours : 0)),
     contacts: entries.filter((entry) => Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)) > 0).length,
-    observations: entries.filter((entry) => entry.supervisorClientObservation).length
+    observations: entries.filter(isSupervisorClientObservation).length
   };
 }
 
@@ -955,7 +955,6 @@ function loadEntryIntoForm(entry, { copy }) {
   $("supervisionSameTime").checked = !entry.supervisionStartTime || (entry.supervisionStartTime === entry.startTime && entry.supervisionEndTime === entry.endTime);
   $("supervisionStartTime").value = entry.supervisionStartTime || entry.startTime;
   $("supervisionEndTime").value = entry.supervisionEndTime || entry.endTime;
-  $("supervisorClientObservation").checked = entry.supervisorClientObservation;
   $("manualOverride").checked = entry.manualOverride;
   $("activityCategory").value = entry.activityCategory;
   $("experienceType").value = entry.experienceType;
@@ -1029,7 +1028,7 @@ async function saveSplitSession() {
       groupSupervisionHours: 0,
       supervisorId: supervised ? $("supervisorId").value : "",
       clientPresent: activity.clientPresent,
-      supervisorClientObservation: activity.name.includes("Observation"),
+      supervisorClientObservation: supervised && activity.clientPresent,
       setting: state.profile.defaultSetting || "",
       notes: segment.querySelector(".segment-notes").value.trim(),
       manualOverride: false,
@@ -1076,10 +1075,14 @@ function rowsForEntries(entries) {
     "Independent Hours": Math.max(Number(entry.durationHours || 0) - Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)), 0),
     Supervisor: supervisorName(entry.supervisorId),
     "Client Present": entry.clientPresent ? "Yes" : "No",
-    "Supervisor-Client Observation": entry.supervisorClientObservation ? "Yes" : "No",
+    "Supervisor-Client Observation": isSupervisorClientObservation(entry) ? "Yes" : "No",
     Setting: entry.setting,
     Notes: entry.notes
   }));
+}
+
+function isSupervisorClientObservation(entry) {
+  return !!entry.supervisorClientObservation || (entry.clientPresent && Number(entry.supervisedHours || 0) > 0);
 }
 
 function download(filename, content, type) {
