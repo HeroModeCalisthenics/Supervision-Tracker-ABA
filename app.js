@@ -1058,7 +1058,6 @@ function exportRows() {
 }
 
 function rowsForEntries(entries) {
-  const splitSessionLabels = buildSplitSessionLabels(entries);
   return entries.map((entry) => ({
     Date: entry.date,
     Start: entry.startTime,
@@ -1079,16 +1078,8 @@ function rowsForEntries(entries) {
     "Client Present": entry.clientPresent ? "Yes" : "No",
     "Supervisor-Client Observation": entry.supervisorClientObservation ? "Yes" : "No",
     Setting: entry.setting,
-    Notes: entry.notes,
-    "Manual Override": entry.manualOverride ? "Yes" : "No",
-    "Override Reason": entry.overrideReason,
-    "Split Session": splitSessionLabels.get(entry.parentSessionId) || ""
+    Notes: entry.notes
   }));
-}
-
-function buildSplitSessionLabels(entries) {
-  const parentIds = [...new Set(entries.map((entry) => entry.parentSessionId).filter(Boolean))];
-  return new Map(parentIds.map((id, index) => [id, `Split Session ${index + 1}`]));
 }
 
 function download(filename, content, type) {
