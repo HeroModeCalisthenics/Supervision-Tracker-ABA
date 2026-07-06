@@ -1195,18 +1195,15 @@ function renderFvfStatus() {
   $("fvfSignatureIntent").disabled = !hasSignature || !$("fvfApplySignature").checked;
 }
 
-function monthlyFvfEntries(monthKeyValue, supervisorId) {
-  return entriesForMonth(monthKeyValue).filter((entry) => {
-    const supervised = Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)) > 0;
-    return !supervised || entry.supervisorId === supervisorId;
-  });
+function monthlyFvfEntries(monthKeyValue) {
+  return entriesForMonth(monthKeyValue);
 }
 
 function monthlyFvfData() {
   const monthKeyValue = $("fvfMonth").value || $("dashboardMonth").value || currentMonth();
   const supervisorId = $("fvfSupervisor").value || state.supervisors[0]?.id || "";
   const supervisor = state.supervisors.find((sup) => sup.id === supervisorId);
-  const entries = monthlyFvfEntries(monthKeyValue, supervisorId);
+  const entries = monthlyFvfEntries(monthKeyValue);
   const totalsForForm = totals(entries);
   return {
     monthKeyValue,
