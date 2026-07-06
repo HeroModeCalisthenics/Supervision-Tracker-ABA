@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fieldwork Flow</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -230,6 +231,32 @@
               </table>
             </div>
           </section>
+
+          <section class="fvf-panel">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Monthly FVF</p>
+                <h3>Verification form</h3>
+              </div>
+            </div>
+            <form class="fvf-grid" id="fvfForm">
+              <label>Supervisor <select id="fvfSupervisor"></select></label>
+              <label>Fieldwork type
+                <select id="fvfFieldworkType">
+                  <option value="standard">Supervised Fieldwork</option>
+                  <option value="concentrated">Concentrated Supervised Fieldwork</option>
+                </select>
+              </label>
+              <label class="switch-row"><span>Partial month?</span><input type="checkbox" id="fvfPartialMonth" /></label>
+              <label class="switch-row"><span>Apply trainee signature?</span><input type="checkbox" id="fvfApplySignature" /></label>
+              <label class="switch-row full"><span>I am the trainee named on this form and intend to electronically sign it.</span><input type="checkbox" id="fvfSignatureIntent" /></label>
+              <div class="fvf-actions full">
+                <button type="submit" class="primary-action">Download FVF</button>
+                <button type="button" class="secondary-action" id="emailFvfBtn">Email supervisor</button>
+              </div>
+              <p class="fine-print full">Downloads the filled BACB Monthly FVF using this month, supervisor, and trainee profile. Supervisor signature is never applied by this app.</p>
+            </form>
+          </section>
         </section>
 
         <section class="view" id="entries">
@@ -279,6 +306,14 @@
           <form class="settings-grid" id="settingsForm">
             <label>Name <input id="profileName" placeholder="Your name" /></label>
             <label>Email <input id="profileEmail" type="email" placeholder="you@example.com" /></label>
+            <label>BACB ID <input id="profileBacbId" placeholder="BACB ID" /></label>
+            <label>State <input id="profileState" placeholder="State where fieldwork occurs" /></label>
+            <label>Country <input id="profileCountry" placeholder="Country where fieldwork occurs" /></label>
+            <label class="full">Trainee signature <input id="profileSignature" type="file" accept="image/png,image/jpeg" /></label>
+            <div class="signature-preview full">
+              <img id="signaturePreview" alt="Trainee signature preview" />
+              <button type="button" class="ghost-action" id="clearSignatureBtn">Clear signature</button>
+            </div>
             <label>Weekly hour goal <input id="weeklyGoal" type="number" min="0" step="0.25" /></label>
             <label>Unrestricted target % <input id="unrestrictedTarget" type="number" min="0" max="100" /></label>
             <label>Supervision target % <input id="supervisionTarget" type="number" min="0" max="100" /></label>
@@ -290,6 +325,7 @@
             <h3>Add supervisor</h3>
             <label>Name <input id="supervisorName" required /></label>
             <label>Credential <input id="supervisorCredential" placeholder="BCBA" /></label>
+            <label>BACB ID / Certification # <input id="supervisorBacbId" /></label>
             <label>Email <input id="supervisorEmail" type="email" /></label>
             <label>Organization <input id="supervisorOrg" /></label>
             <button class="secondary-action" type="submit">Add supervisor</button>

@@ -141,9 +141,11 @@ h3 {
 .stat-card,
 .path-panel,
 .total-hours-panel,
+.fvf-panel,
 .two-column > section,
 .supervisor-form,
 .settings-grid,
+.fvf-grid,
 .ratio-stack,
 .table-wrap,
 .entry-card,
@@ -252,7 +254,8 @@ h3 {
 
 .log-form,
 .settings-grid,
-.supervisor-form {
+.supervisor-form,
+.fvf-grid {
   display: grid;
   gap: 14px;
   padding: 16px;
@@ -260,7 +263,8 @@ h3 {
 
 .form-row,
 .conditional,
-.settings-grid {
+.settings-grid,
+.fvf-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
@@ -545,6 +549,38 @@ textarea {
 
 .total-hours-table {
   box-shadow: none;
+}
+
+.fvf-panel {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.fvf-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  box-shadow: none;
+}
+
+.fvf-actions,
+.signature-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.signature-preview {
+  min-height: 54px;
+}
+
+.signature-preview img {
+  max-width: 220px;
+  max-height: 54px;
+  object-fit: contain;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
 }
 
 .path-grid {

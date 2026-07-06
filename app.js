@@ -1,4 +1,5 @@
 const STORAGE_KEY = "fieldwork-flow-state-v1";
+const MONTHLY_FVF_TEMPLATE = "./assets/monthly-fieldwork-verification-form.pdf";
 const CLOUD_PROFILE_DEFAULTS = {
   weeklyGoal: 20,
   unrestrictedTarget: 60,
@@ -38,13 +39,17 @@ function loadState() {
     profile: {
       name: "",
       email: "",
+      bacbId: "",
+      state: "",
+      country: "United States",
+      signatureDataUrl: "",
       weeklyGoal: 20,
       unrestrictedTarget: 60,
       supervisionTarget: 5,
       defaultSetting: "Clinic"
     },
     supervisors: [
-      { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", email: "", organization: "", active: true }
+      { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", bacbId: "", email: "", organization: "", active: true }
     ],
     entries: []
   };
@@ -153,6 +158,10 @@ async function loadCloudState() {
     state.profile = {
       name: profile?.name || "",
       email: profile?.email || cloud.user.email || "",
+      bacbId: profile?.bacb_id || state.profile.bacbId || "",
+      state: profile?.fieldwork_state || state.profile.state || "",
+      country: profile?.fieldwork_country || state.profile.country || "United States",
+      signatureDataUrl: profile?.trainee_signature_data_url || state.profile.signatureDataUrl || "",
       weeklyGoal: Number(settings?.weekly_hour_goal ?? CLOUD_PROFILE_DEFAULTS.weeklyGoal),
       unrestrictedTarget: Number(settings?.unrestricted_target_percentage ?? CLOUD_PROFILE_DEFAULTS.unrestrictedTarget),
       supervisionTarget: Number(settings?.supervision_target_percentage ?? CLOUD_PROFILE_DEFAULTS.supervisionTarget),
@@ -183,7 +192,11 @@ async function ensureCloudProfile() {
   const profilePayload = {
     id: cloud.user.id,
     email: state.profile.email || cloud.user.email || "",
-    name: state.profile.name || ""
+    name: state.profile.name || "",
+    bacb_id: state.profile.bacbId || "",
+    fieldwork_state: state.profile.state || "",
+    fieldwork_country: state.profile.country || "",
+    trainee_signature_data_url: state.profile.signatureDataUrl || ""
   };
   const settingsPayload = {
     user_id: cloud.user.id,
@@ -199,7 +212,7 @@ async function ensureCloudProfile() {
 }
 
 async function createDefaultCloudSupervisor() {
-  const fallback = { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", email: "", organization: "", active: true };
+  const fallback = { id: crypto.randomUUID(), name: "Default Supervisor", credential: "BCBA", bacbId: "", email: "", organization: "", active: true };
   const saved = await saveCloudSupervisor(fallback);
   state.supervisors = [saved || fallback];
   saveState();
@@ -301,6 +314,7 @@ function toCloudSupervisor(supervisor) {
     user_id: cloud.user.id,
     supervisor_name: supervisor.name,
     credential: supervisor.credential,
+    bacb_id: supervisor.bacbId || "",
     email: supervisor.email,
     organization: supervisor.organization,
     active_status: supervisor.active
@@ -312,6 +326,7 @@ function fromCloudSupervisor(row) {
     id: row.id,
     name: row.supervisor_name,
     credential: row.credential || "",
+    bacbId: row.bacb_id || "",
     email: row.email || "",
     organization: row.organization || "",
     active: row.active_status
@@ -447,6 +462,7 @@ function renderSupervisorSelects() {
   const allOption = `<option value="">All</option>`;
   $("supervisorId").innerHTML = options || `<option value="">Add a supervisor first</option>`;
   $("filterSupervisor").innerHTML = allOption + options;
+  $("fvfSupervisor").innerHTML = options || `<option value="">Add a supervisor first</option>`;
 }
 
 function collectEntry() {
@@ -516,6 +532,7 @@ function renderAll() {
   renderEntriesTable();
   renderSettings();
   renderSupervisors();
+  renderFvfStatus();
   renderClassification();
 }
 
@@ -920,6 +937,12 @@ async function deleteEntry(id) {
 function renderSettings() {
   $("profileName").value = state.profile.name || "";
   $("profileEmail").value = state.profile.email || "";
+  $("profileBacbId").value = state.profile.bacbId || "";
+  $("profileState").value = state.profile.state || "";
+  $("profileCountry").value = state.profile.country || "";
+  $("signaturePreview").src = state.profile.signatureDataUrl || "";
+  $("signaturePreview").classList.toggle("hidden", !state.profile.signatureDataUrl);
+  $("clearSignatureBtn").classList.toggle("hidden", !state.profile.signatureDataUrl);
   $("weeklyGoal").value = state.profile.weeklyGoal || 0;
   $("unrestrictedTarget").value = state.profile.unrestrictedTarget || 60;
   $("supervisionTarget").value = state.profile.supervisionTarget || 5;
@@ -928,9 +951,45 @@ function renderSettings() {
 
 function renderSupervisors() {
   $("supervisorList").innerHTML = state.supervisors.map((sup) => `<article class="entry-card">
-    <header><strong>${escapeHtml(sup.name)}</strong><button class="ghost-action" data-delete-supervisor="${sup.id}">Remove</button></header>
-    <p class="muted">${escapeHtml([sup.credential, sup.organization, sup.email].filter(Boolean).join(" - ") || "No details")}</p>
+    <header>
+      <strong>${escapeHtml(sup.name)}</strong>
+      <div>
+        <button class="ghost-action" data-update-supervisor="${sup.id}">Update</button>
+        <button class="ghost-action" data-delete-supervisor="${sup.id}">Remove</button>
+      </div>
+    </header>
+    <p class="muted">${escapeHtml([sup.credential, sup.bacbId, sup.organization, sup.email].filter(Boolean).join(" - ") || "No details")}</p>
   </article>`).join("");
+}
+
+async function updateSupervisorDetails(id) {
+  const supervisor = state.supervisors.find((sup) => sup.id === id);
+  if (!supervisor) return;
+  const name = prompt("Supervisor name", supervisor.name || "");
+  if (name === null || !name.trim()) return;
+  const credential = prompt("Credential", supervisor.credential || "") ?? supervisor.credential;
+  const bacbId = prompt("BACB ID / certification number", supervisor.bacbId || "") ?? supervisor.bacbId;
+  const email = prompt("Email", supervisor.email || "") ?? supervisor.email;
+  const organization = prompt("Organization", supervisor.organization || "") ?? supervisor.organization;
+  const updated = {
+    ...supervisor,
+    name: name.trim(),
+    credential: credential.trim(),
+    bacbId: bacbId.trim(),
+    email: email.trim(),
+    organization: organization.trim()
+  };
+  state.supervisors = state.supervisors.map((sup) => sup.id === id ? updated : sup);
+  saveState();
+  renderAll();
+  if (cloud.user) {
+    try {
+      await saveCloudSupervisor(updated);
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Supervisor error: ${error.message}`);
+    }
+  }
 }
 
 function editEntry(id) {
@@ -1123,6 +1182,153 @@ function exportExcel() {
 function exportTotalHoursExcel() {
   const rows = totalHoursExportRows();
   downloadXlsx(`fieldwork-flow-total-hours-${todayIso()}.xlsx`, "Total Hours", rows);
+}
+
+function renderFvfStatus() {
+  const hasSignature = !!state.profile.signatureDataUrl;
+  $("fvfApplySignature").disabled = !hasSignature;
+  if (!hasSignature) {
+    $("fvfApplySignature").checked = false;
+    $("fvfSignatureIntent").checked = false;
+  }
+  $("fvfSignatureIntent").disabled = !hasSignature || !$("fvfApplySignature").checked;
+}
+
+function monthlyFvfEntries(monthKeyValue, supervisorId) {
+  return entriesForMonth(monthKeyValue).filter((entry) => {
+    const supervised = Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)) > 0;
+    return !supervised || entry.supervisorId === supervisorId;
+  });
+}
+
+function monthlyFvfData() {
+  const monthKeyValue = $("dashboardMonth").value || currentMonth();
+  const supervisorId = $("fvfSupervisor").value || state.supervisors[0]?.id || "";
+  const supervisor = state.supervisors.find((sup) => sup.id === supervisorId);
+  const entries = monthlyFvfEntries(monthKeyValue, supervisorId);
+  const totalsForForm = totals(entries);
+  return {
+    monthKeyValue,
+    monthYear: monthLabel(monthKeyValue),
+    supervisor,
+    entries,
+    totals: totalsForForm,
+    fieldworkType: $("fvfFieldworkType").value,
+    partialMonth: $("fvfPartialMonth").checked,
+    applySignature: $("fvfApplySignature").checked,
+    signatureIntent: $("fvfSignatureIntent").checked
+  };
+}
+
+function validateMonthlyFvf(data) {
+  if (!window.PDFLib) return "PDF tools are still loading. Try again in a moment.";
+  if (!data.supervisor) return "Add or select a supervisor first.";
+  if (!state.profile.name) return "Add the trainee name in Settings first.";
+  if (!state.profile.bacbId) return "Add the trainee BACB ID in Settings first.";
+  if (!state.profile.state || !state.profile.country) return "Add the fieldwork state and country in Settings first.";
+  if (!data.supervisor.bacbId) return "Add the supervisor BACB ID / certification number in Settings first.";
+  if (data.applySignature && !state.profile.signatureDataUrl) return "Upload a trainee signature in Settings first.";
+  if (data.applySignature && !data.signatureIntent) return "Check the trainee signature intent box before applying the signature.";
+  return "";
+}
+
+async function generateMonthlyFvf({ emailSupervisor = false } = {}) {
+  const data = monthlyFvfData();
+  const validationError = validateMonthlyFvf(data);
+  if (validationError) {
+    alert(validationError);
+    return;
+  }
+  const pdfBytes = await buildMonthlyFvfPdf(data);
+  const supervisorSlug = slugify(data.supervisor.name || "supervisor");
+  const filename = `monthly-fvf-${data.monthKeyValue}-${supervisorSlug}.pdf`;
+  download(filename, pdfBytes, "application/pdf");
+  if (emailSupervisor) openSupervisorEmail(data, filename);
+}
+
+async function buildMonthlyFvfPdf(data) {
+  const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+  const templateBytes = await fetch(MONTHLY_FVF_TEMPLATE).then((response) => {
+    if (!response.ok) throw new Error("Monthly FVF template could not be loaded.");
+    return response.arrayBuffer();
+  });
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const page = pdfDoc.getPages()[0];
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0.05, 0.08, 0.1);
+  const draw = (text, x, y, size = 10, options = {}) => {
+    page.drawText(String(text || ""), { x, y, size, font: options.bold ? boldFont : font, color: ink, maxWidth: options.maxWidth });
+  };
+  const drawX = (x, y) => draw("X", x, y, 11, { bold: true });
+  const t = data.totals;
+  const today = formatDate(todayIso());
+
+  draw(state.profile.name, 108, 596, 10, { maxWidth: 300 });
+  draw(state.profile.bacbId, 92, 571, 10, { maxWidth: 145 });
+  draw(data.monthYear, 354, 571, 10, { maxWidth: 160 });
+  if (data.fieldworkType === "standard") {
+    drawX(190, 550);
+  } else {
+    drawX(392, 550);
+  }
+  draw(state.profile.state, 178, 532, 10, { maxWidth: 120 });
+  draw(state.profile.country, 456, 532, 10, { maxWidth: 110 });
+  draw(data.supervisor.name, 125, 499, 10, { maxWidth: 350 });
+  draw(data.supervisor.bacbId, 155, 475, 10, { maxWidth: 180 });
+  draw(formatHours(t.independent), 285, 415, 10, { bold: true });
+  draw(formatHours(t.supervised), 285, 399, 10, { bold: true });
+  draw(formatHours(t.total), 494, 415, 10, { bold: true });
+  draw(`${percentFixed(t.supervised, t.total)}%`, 494, 385, 10, { bold: true });
+  if (data.partialMonth) drawX(39, 384);
+
+  if (data.applySignature) {
+    await drawSignature(pdfDoc, page, state.profile.signatureDataUrl, 126, 106, 190, 38);
+    draw(today, 478, 111, 10);
+  }
+
+  pdfDoc.setTitle(`Monthly Fieldwork Verification Form - ${data.monthYear}`);
+  pdfDoc.setSubject("Trainee-prepared Monthly FVF");
+  pdfDoc.setProducer("Fieldwork Flow");
+  pdfDoc.setCreator("Fieldwork Flow");
+  pdfDoc.setKeywords(["BACB", "Monthly FVF", "trainee signature"]);
+  return await pdfDoc.save();
+}
+
+async function drawSignature(pdfDoc, page, dataUrl, x, y, maxWidth, maxHeight) {
+  const [meta, base64] = dataUrl.split(",");
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const image = meta.includes("image/png") ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+  page.drawImage(image, { x, y, width: image.width * scale, height: image.height * scale });
+}
+
+function openSupervisorEmail(data, filename) {
+  if (!data.supervisor.email) {
+    alert("Add the supervisor email in Settings first.");
+    return;
+  }
+  const subject = `Monthly FVF for ${data.monthYear}`;
+  const body = [
+    `Hi ${data.supervisor.name || ""},`,
+    "",
+    `I generated my Monthly Fieldwork Verification Form for ${data.monthYear}.`,
+    `Please review the attached PDF and sign the supervisor section if everything is accurate.`,
+    "",
+    `Attachment to add: ${filename}`,
+    "",
+    "Thank you,"
+  ].join("\n");
+  window.location.href = `mailto:${encodeURIComponent(data.supervisor.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function slugify(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "supervisor";
+}
+
+function percentFixed(part, total) {
+  if (!total) return "0.00";
+  return ((Number(part) / Number(total)) * 100).toFixed(2);
 }
 
 function downloadXlsx(filename, sheetName, rows) {
@@ -1318,6 +1524,9 @@ document.addEventListener("click", async (event) => {
   const deleteEntryButton = event.target.closest("[data-delete-entry]");
   if (deleteEntryButton) await deleteEntry(deleteEntryButton.dataset.deleteEntry);
 
+  const updateSupervisorButton = event.target.closest("[data-update-supervisor]");
+  if (updateSupervisorButton) await updateSupervisorDetails(updateSupervisorButton.dataset.updateSupervisor);
+
   const removeSegment = event.target.closest(".segment-remove");
   if (removeSegment) removeSegment.closest(".segment-card").remove();
 
@@ -1356,6 +1565,10 @@ $("settingsForm").addEventListener("submit", async (event) => {
   state.profile = {
     name: $("profileName").value.trim(),
     email: $("profileEmail").value.trim(),
+    bacbId: $("profileBacbId").value.trim(),
+    state: $("profileState").value.trim(),
+    country: $("profileCountry").value.trim(),
+    signatureDataUrl: state.profile.signatureDataUrl || "",
     weeklyGoal: Number($("weeklyGoal").value || 0),
     unrestrictedTarget: Number($("unrestrictedTarget").value || 60),
     supervisionTarget: Number($("supervisionTarget").value || 5),
@@ -1379,6 +1592,7 @@ $("supervisorForm").addEventListener("submit", async (event) => {
     id: crypto.randomUUID(),
     name: $("supervisorName").value.trim(),
     credential: $("supervisorCredential").value.trim(),
+    bacbId: $("supervisorBacbId").value.trim(),
     email: $("supervisorEmail").value.trim(),
     organization: $("supervisorOrg").value.trim(),
     active: true
@@ -1402,6 +1616,51 @@ $("supervisorForm").addEventListener("submit", async (event) => {
   }
 });
 
+$("profileSignature").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!["image/png", "image/jpeg"].includes(file.type)) {
+    alert("Upload a PNG or JPEG signature image.");
+    event.target.value = "";
+    return;
+  }
+  if (file.size > 500000) {
+    alert("Use a smaller signature image under 500 KB.");
+    event.target.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.addEventListener("load", async () => {
+    state.profile.signatureDataUrl = reader.result;
+    saveState();
+    renderAll();
+    if (cloud.user) {
+      try {
+        await saveCloudSettings();
+        updateAuthUi();
+      } catch (error) {
+        setAuthStatus(`Signature error: ${error.message}`);
+      }
+    }
+  });
+  reader.readAsDataURL(file);
+});
+
+$("clearSignatureBtn").addEventListener("click", async () => {
+  state.profile.signatureDataUrl = "";
+  $("profileSignature").value = "";
+  saveState();
+  renderAll();
+  if (cloud.user) {
+    try {
+      await saveCloudSettings();
+      updateAuthUi();
+    } catch (error) {
+      setAuthStatus(`Signature error: ${error.message}`);
+    }
+  }
+});
+
 ["filterFrom", "filterTo", "filterCategory", "filterSupervisor", "dashboardMonth"].forEach((id) => {
   $(id).addEventListener("input", renderAll);
   $(id).addEventListener("change", renderAll);
@@ -1411,6 +1670,24 @@ $("resetFormBtn").addEventListener("click", resetForm);
 $("exportCsvBtn").addEventListener("click", exportCsv);
 $("exportExcelBtn").addEventListener("click", exportExcel);
 $("exportTotalHoursExcelBtn").addEventListener("click", exportTotalHoursExcel);
+$("fvfForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await generateMonthlyFvf();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+$("emailFvfBtn").addEventListener("click", async () => {
+  try {
+    await generateMonthlyFvf({ emailSupervisor: true });
+  } catch (error) {
+    alert(error.message);
+  }
+});
+["fvfApplySignature", "fvfSignatureIntent"].forEach((id) => {
+  $(id).addEventListener("change", renderFvfStatus);
+});
 $("printBtn").addEventListener("click", printSummary);
 $("openMonthlyReviewBtn").addEventListener("click", openMonthlyReview);
 $("closeMonthlyReviewBtn").addEventListener("click", () => $("monthlyReviewDialog").close());

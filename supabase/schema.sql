@@ -7,6 +7,10 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   name text,
+  bacb_id text,
+  fieldwork_state text,
+  fieldwork_country text,
+  trainee_signature_data_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -16,6 +20,7 @@ create table if not exists public.supervisors (
   user_id uuid not null references auth.users(id) on delete cascade,
   supervisor_name text not null,
   credential text,
+  bacb_id text,
   email text,
   organization text,
   active_status boolean not null default true,
