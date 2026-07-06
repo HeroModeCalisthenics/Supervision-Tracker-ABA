@@ -1,5 +1,5 @@
 const STORAGE_KEY = "fieldwork-flow-state-v1";
-const MONTHLY_FVF_TEMPLATE = "./assets/monthly-fieldwork-verification-form.pdf";
+const MONTHLY_FVF_TEMPLATE = "./assets/BACB-Monthly-Fieldwork-Verification-Form-Organization-Multiple-Supervisors_240201-a.pdf";
 const CLOUD_PROFILE_DEFAULTS = {
   weeklyGoal: 20,
   unrestrictedTarget: 60,
@@ -1185,6 +1185,7 @@ function exportTotalHoursExcel() {
 }
 
 function renderFvfStatus() {
+  if (!$("fvfMonth").value) $("fvfMonth").value = $("dashboardMonth").value || currentMonth();
   const hasSignature = !!state.profile.signatureDataUrl;
   $("fvfApplySignature").disabled = !hasSignature;
   if (!hasSignature) {
@@ -1202,7 +1203,7 @@ function monthlyFvfEntries(monthKeyValue, supervisorId) {
 }
 
 function monthlyFvfData() {
-  const monthKeyValue = $("dashboardMonth").value || currentMonth();
+  const monthKeyValue = $("fvfMonth").value || $("dashboardMonth").value || currentMonth();
   const supervisorId = $("fvfSupervisor").value || state.supervisors[0]?.id || "";
   const supervisor = state.supervisors.find((sup) => sup.id === supervisorId);
   const entries = monthlyFvfEntries(monthKeyValue, supervisorId);
@@ -1247,7 +1248,7 @@ async function generateMonthlyFvf({ emailSupervisor = false } = {}) {
 }
 
 async function buildMonthlyFvfPdf(data) {
-  const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+  const { PDFDocument, StandardFonts } = window.PDFLib;
   const templateBytes = await fetch(MONTHLY_FVF_TEMPLATE).then((response) => {
     if (!response.ok) throw new Error("Monthly FVF template could not be loaded.");
     return response.arrayBuffer();
@@ -1255,36 +1256,28 @@ async function buildMonthlyFvfPdf(data) {
   const pdfDoc = await PDFDocument.load(templateBytes);
   const page = pdfDoc.getPages()[0];
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const ink = rgb(0.05, 0.08, 0.1);
-  const draw = (text, x, y, size = 10, options = {}) => {
-    page.drawText(String(text || ""), { x, y, size, font: options.bold ? boldFont : font, color: ink, maxWidth: options.maxWidth });
-  };
-  const drawX = (x, y) => draw("X", x, y, 11, { bold: true });
+  const form = pdfDoc.getForm();
   const t = data.totals;
   const today = formatDate(todayIso());
-
-  draw(state.profile.name, 108, 596, 10, { maxWidth: 300 });
-  draw(state.profile.bacbId, 92, 571, 10, { maxWidth: 145 });
-  draw(data.monthYear, 354, 571, 10, { maxWidth: 160 });
-  if (data.fieldworkType === "standard") {
-    drawX(190, 550);
-  } else {
-    drawX(392, 550);
-  }
-  draw(state.profile.state, 178, 532, 10, { maxWidth: 120 });
-  draw(state.profile.country, 456, 532, 10, { maxWidth: 110 });
-  draw(data.supervisor.name, 125, 499, 10, { maxWidth: 350 });
-  draw(data.supervisor.bacbId, 155, 475, 10, { maxWidth: 180 });
-  draw(formatHours(t.independent), 285, 415, 10, { bold: true });
-  draw(formatHours(t.supervised), 285, 399, 10, { bold: true });
-  draw(formatHours(t.total), 494, 415, 10, { bold: true });
-  draw(`${percentFixed(t.supervised, t.total)}%`, 494, 385, 10, { bold: true });
-  if (data.partialMonth) drawX(39, 384);
+  const setText = (name, value) => form.getTextField(name).setText(String(value ?? ""));
+  setText("TRAINEE_NAME", state.profile.name);
+  setText("TRAINEE_BACB_ID", state.profile.bacbId);
+  setText("TRAINEE_CERTIFICATE_MONTH/YEAR", data.monthYear);
+  setText("TRAINEE_FIELDWORK_STATE", state.profile.state);
+  setText("TRAINEE_FIELDWORK_COUNTRY", state.profile.country);
+  setText("RESPONSIBLE_SUPERVISOR_NAME", data.supervisor.name);
+  setText("RESPONSIBLE_SUPERVISOR_BACB_ID", data.supervisor.bacbId);
+  setText("INDEPENDENT_HOURS", formatHours(t.independent));
+  setText("SUPERVISED_HOURS", formatHours(t.supervised));
+  setText("TOTAL_FIELDWORK", formatHours(t.total));
+  setText("PERCENT_HOURS_SUPERVISED", `${percentFixed(t.supervised, t.total)}%`);
+  if (data.applySignature) setText("TRAINEE_SIGNATURE_DATE", today);
+  if (data.partialMonth) form.getCheckBox("This fieldwork included prorated hours for a partial month").check();
+  form.getRadioGroup("CHECK_SUPERVISED_FIELDWORK").select(data.fieldworkType === "standard" ? "Supervised Fieldwork" : "Concentrated Supervised Fieldwork");
+  form.updateFieldAppearances(font);
 
   if (data.applySignature) {
-    await drawSignature(pdfDoc, page, state.profile.signatureDataUrl, 126, 106, 190, 38);
-    draw(today, 478, 111, 10);
+    await drawSignature(pdfDoc, page, state.profile.signatureDataUrl, 132, 115, 300, 26);
   }
 
   pdfDoc.setTitle(`Monthly Fieldwork Verification Form - ${data.monthYear}`);
