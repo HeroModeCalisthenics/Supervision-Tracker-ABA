@@ -1175,13 +1175,40 @@ function downloadCsvRows(rows, filename) {
 }
 
 function exportExcel() {
-  const rows = exportRows();
-  downloadXlsx(`fieldwork-flow-${todayIso()}.xlsx`, "Entries", rows);
+  const entries = filteredEntries();
+  const rows = rowsForEntries(entries);
+  const filename = `Fieldwork Documentation Spreadsheet ${entryDateFileLabel(entries)} - ${traineeFileLabel()}.xlsx`;
+  downloadXlsx(filename, "Entries", rows);
 }
 
 function exportTotalHoursExcel() {
   const rows = totalHoursExportRows();
-  downloadXlsx(`fieldwork-flow-total-hours-${todayIso()}.xlsx`, "Total Hours", rows);
+  const filename = `Fieldwork Total Hours Summary - ${traineeFileLabel()}.xlsx`;
+  downloadXlsx(filename, "Total Hours", rows);
+}
+
+function traineeFileLabel() {
+  return cleanFilePart(state.profile.name || "Trainee");
+}
+
+function entryDateFileLabel(entries) {
+  const dates = entries.map((entry) => entry.date).filter(Boolean).sort();
+  if (!dates.length) return monthFileLabel($("dashboardMonth").value || currentMonth());
+  const months = [...new Set(dates.map(monthKey))];
+  if (months.length === 1) return monthFileLabel(months[0]);
+  return `${dates[0]} to ${dates[dates.length - 1]}`;
+}
+
+function monthFileLabel(key) {
+  const [year, month] = key.split("-");
+  return `${Number(month)}-${year}`;
+}
+
+function cleanFilePart(value) {
+  return String(value || "")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim() || "Trainee";
 }
 
 function renderFvfStatus() {
