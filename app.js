@@ -1248,7 +1248,7 @@ async function generateMonthlyFvf({ emailSupervisor = false } = {}) {
 }
 
 async function buildMonthlyFvfPdf(data) {
-  const { PDFDocument, StandardFonts } = window.PDFLib;
+  const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
   const templateBytes = await fetch(MONTHLY_FVF_TEMPLATE).then((response) => {
     if (!response.ok) throw new Error("Monthly FVF template could not be loaded.");
     return response.arrayBuffer();
@@ -1260,6 +1260,7 @@ async function buildMonthlyFvfPdf(data) {
   const t = data.totals;
   const today = formatDate(todayIso());
   const setText = (name, value) => form.getTextField(name).setText(String(value ?? ""));
+  const drawX = (x, y) => page.drawText("X", { x, y, size: 11, font, color: rgb(0.05, 0.08, 0.1) });
   setText("TRAINEE_NAME", state.profile.name);
   setText("TRAINEE_BACB_ID", state.profile.bacbId);
   setText("TRAINEE_CERTIFICATE_MONTH/YEAR", data.monthYear);
@@ -1272,8 +1273,12 @@ async function buildMonthlyFvfPdf(data) {
   setText("TOTAL_FIELDWORK", formatHours(t.total));
   setText("PERCENT_HOURS_SUPERVISED", `${percentFixed(t.supervised, t.total)}%`);
   if (data.applySignature) setText("TRAINEE_SIGNATURE_DATE", today);
-  if (data.partialMonth) form.getCheckBox("This fieldwork included prorated hours for a partial month").check();
-  form.getRadioGroup("CHECK_SUPERVISED_FIELDWORK").select(data.fieldworkType === "standard" ? "Supervised Fieldwork" : "Concentrated Supervised Fieldwork");
+  if (data.fieldworkType === "standard") {
+    drawX(190, 553);
+  } else {
+    drawX(323, 553);
+  }
+  if (data.partialMonth) drawX(36, 380);
   form.updateFieldAppearances(font);
 
   if (data.applySignature) {
