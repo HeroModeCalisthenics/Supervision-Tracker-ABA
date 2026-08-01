@@ -7,6 +7,20 @@ const CLOUD_PROFILE_DEFAULTS = {
   defaultSetting: "Clinic"
 };
 
+const FIELDWORK_REQUIREMENTS_2027 = {
+  minMonthlyHours: 20,
+  maxMonthlyHours: 160,
+  unrestrictedPct: 60,
+  standard: {
+    supervisionPct: 5,
+    observationHours: 1
+  },
+  concentrated: {
+    supervisionPct: 7.5,
+    observationHours: 1.5
+  }
+};
+
 const activityTypes = [
   { name: "Direct Therapy", category: "Restricted", experience: "Independent", clientPresent: true, badge: "Restricted", prompt: "Implemented acquisition targets and behavior support plan." },
   { name: "Supervision Meeting", category: "Unrestricted", experience: "Supervised", clientPresent: false, badge: "Supervised", prompt: "Discussed cases, feedback, competencies, and next steps." },
@@ -543,6 +557,7 @@ function entriesForMonth(key = $("dashboardMonth").value || currentMonth()) {
 function totals(entries) {
   const sum = (filter) => entries.filter(filter).reduce((acc, entry) => acc + Number(entry.durationHours || 0), 0);
   const sumValue = (selector) => entries.reduce((acc, entry) => acc + Number(selector(entry) || 0), 0);
+  const observationEntries = entries.filter(isSupervisorClientObservation);
   const total = sum(() => true);
   return {
     total,
@@ -553,23 +568,24 @@ function totals(entries) {
     individualSupervision: sumValue((entry) => entry.individualSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Individual" ? entry.durationHours : 0)),
     groupSupervision: sumValue((entry) => entry.groupSupervisionHours ?? (entry.experienceType === "Supervised" && entry.supervisionType === "Group" ? entry.durationHours : 0)),
     contacts: entries.filter((entry) => Number(entry.supervisedHours ?? (entry.experienceType === "Supervised" ? entry.durationHours : 0)) > 0).length,
-    observations: entries.filter(isSupervisorClientObservation).length
+    observations: observationEntries.length,
+    observationHours: observationEntries.reduce((acc, entry) => acc + Number((entry.supervisedHours ?? entry.durationHours) || 0), 0)
   };
 }
 
 function evaluatePath(entries, type) {
   const t = totals(entries);
-  const isConcentrated = type === "concentrated";
-  const requiredPct = isConcentrated ? 10 : 5;
-  const requiredContacts = isConcentrated ? 6 : 4;
+  const requirements = FIELDWORK_REQUIREMENTS_2027[type] || FIELDWORK_REQUIREMENTS_2027.standard;
+  const requiredPct = requirements.supervisionPct;
+  const requiredObservationHours = requirements.observationHours;
   const requiredSupervised = Math.round((t.total * requiredPct / 100) * 100) / 100;
   const supervisionPct = percent(t.supervised, t.total);
   const checks = [
     {
       key: "hours",
       label: "Monthly hours",
-      met: t.total >= 20 && t.total <= 130,
-      need: t.total < 20 ? `${formatHours(20 - t.total)} more total hours` : t.total > 130 ? "monthly hours are over 130" : ""
+      met: t.total >= FIELDWORK_REQUIREMENTS_2027.minMonthlyHours && t.total <= FIELDWORK_REQUIREMENTS_2027.maxMonthlyHours,
+      need: t.total < FIELDWORK_REQUIREMENTS_2027.minMonthlyHours ? `${formatHours(FIELDWORK_REQUIREMENTS_2027.minMonthlyHours - t.total)} more total hours` : t.total > FIELDWORK_REQUIREMENTS_2027.maxMonthlyHours ? "monthly hours are over 160" : ""
     },
     {
       key: "supervision",
@@ -578,16 +594,16 @@ function evaluatePath(entries, type) {
       need: t.total ? `${formatHours(Math.max(requiredSupervised - t.supervised, 0))} more supervised hours` : "log fieldwork hours first"
     },
     {
-      key: "contacts",
-      label: "Contacts",
-      met: t.contacts >= requiredContacts,
-      need: `${Math.max(requiredContacts - t.contacts, 0)} more supervision contact${requiredContacts - t.contacts === 1 ? "" : "s"}`
+      key: "observation",
+      label: "Client observation time",
+      met: t.observationHours >= requiredObservationHours,
+      need: `${formatHours(Math.max(requiredObservationHours - t.observationHours, 0))} more client-observation hours`
     },
     {
-      key: "observation",
-      label: "Client observation",
-      met: t.observations >= 1,
-      need: "1 supervisor-client observation"
+      key: "unrestricted",
+      label: "Unrestricted",
+      met: t.total > 0 && percent(t.unrestricted, t.total) >= FIELDWORK_REQUIREMENTS_2027.unrestrictedPct,
+      need: `${FIELDWORK_REQUIREMENTS_2027.unrestrictedPct}% unrestricted required`
     },
     {
       key: "individual",
@@ -602,7 +618,7 @@ function evaluatePath(entries, type) {
     yes: missing.length === 0,
     totals: t,
     requiredPct,
-    requiredContacts,
+    requiredObservationHours,
     requiredSupervised,
     supervisionPct,
     missing,
@@ -730,7 +746,7 @@ function renderMonthlyReview() {
     ${reviewSection("Supervision", [
       ["Supervision %", `${percent(t.supervised, t.total)}%`],
       ["Contacts", t.contacts],
-      ["Client observations", t.observations],
+      ["Client observation hours", formatHours(t.observationHours)],
       ["Individual", formatHours(t.individualSupervision)],
       ["Group", formatHours(t.groupSupervision)]
     ])}
@@ -806,7 +822,7 @@ function renderTotalHours() {
   $("totalSupervisedHours").textContent = formatHours(allTotals.supervised);
   $("totalUnrestrictedHours").textContent = formatHours(allTotals.unrestricted);
   $("totalContacts").textContent = String(allTotals.contacts);
-  $("totalObservations").textContent = String(allTotals.observations);
+  $("totalObservations").textContent = formatHours(allTotals.observationHours);
 
   const rows = groupedEntriesByMonth().map(([key, entries]) => {
     const t = totals(entries);
@@ -818,7 +834,7 @@ function renderTotalHours() {
       <td data-label="Supervised">${formatHours(t.supervised)}</td>
       <td data-label="Unrestricted">${formatHours(t.unrestricted)}</td>
       <td data-label="Contacts">${t.contacts}</td>
-      <td data-label="Observations">${t.observations}</td>
+      <td data-label="Observation hours">${formatHours(t.observationHours)}</td>
       <td data-label="Supervision %">${percent(t.supervised, t.total)}%</td>
       <td data-label="Group %">${groupPct}%</td>
     </tr>`;
@@ -841,6 +857,7 @@ function totalHoursExportRows() {
       "# of Unrestricted Hours": formatHours(t.unrestricted),
       "# of Supervision Contacts": t.contacts,
       "# of Client Observations": t.observations,
+      "# of Client Observation Hours": formatHours(t.observationHours),
       "% of Fieldwork Supervised": `${percent(t.supervised, t.total)}%`,
       "% of Group Supervision": `${percent(t.groupSupervision, t.supervised)}%`,
       Standard: standard.yes ? "Yes" : "Not yet",
@@ -857,6 +874,7 @@ function totalHoursExportRows() {
     "# of Unrestricted Hours": formatHours(all.unrestricted),
     "# of Supervision Contacts": all.contacts,
     "# of Client Observations": all.observations,
+    "# of Client Observation Hours": formatHours(all.observationHours),
     "% of Fieldwork Supervised": `${percent(all.supervised, all.total)}%`,
     "% of Group Supervision": `${percent(all.groupSupervision, all.supervised)}%`,
     Standard: "",
@@ -1484,7 +1502,7 @@ function buildPrintSummary() {
   const t = totals(monthEntries);
   return `
     <h2>${key}</h2>
-    <p>Total: ${formatHours(t.total)} - Restricted: ${formatHours(t.restricted)} - Unrestricted: ${formatHours(t.unrestricted)} - Supervised: ${formatHours(t.supervised)} - Independent: ${formatHours(t.independent)} - Contacts: ${t.contacts} - Observations: ${t.observations}</p>
+    <p>Total: ${formatHours(t.total)} - Restricted: ${formatHours(t.restricted)} - Unrestricted: ${formatHours(t.unrestricted)} - Supervised: ${formatHours(t.supervised)} - Independent: ${formatHours(t.independent)} - Contacts: ${t.contacts} - Client obs hours: ${formatHours(t.observationHours)}</p>
     <table><thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Supervision</th><th>Sup. Hours</th><th>Activity</th><th>Category</th><th>Experience</th><th>Supervisor</th><th>Notes</th></tr></thead>
     <tbody>${monthEntries.map((entry) => `<tr><td>${entry.date}</td><td>${entry.startTime}-${entry.endTime}</td><td>${formatHours(entry.durationHours)}</td><td>${entry.supervisionStartTime ? `${entry.supervisionStartTime}-${entry.supervisionEndTime}` : ""}</td><td>${formatHours(entry.supervisedHours || 0)}</td><td>${escapeHtml(entry.activityType)}</td><td>${entry.activityCategory}</td><td>${entry.experienceType}</td><td>${escapeHtml(supervisorName(entry.supervisorId) || "None")}</td><td>${escapeHtml(entry.notes || "")}</td></tr>`).join("")}</tbody></table>
   `;
