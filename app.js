@@ -1,5 +1,5 @@
 const STORAGE_KEY = "fieldwork-flow-state-v1";
-const MONTHLY_FVF_TEMPLATE = "./assets/BACB-Monthly-Fieldwork-Verification-Form-Organization-Multiple-Supervisors_240201-a.pdf";
+const MONTHLY_FVF_TEMPLATE = "./assets/BACB-Monthly-Fieldwork-Verification-Form-Organization-2027.pdf";
 const CLOUD_PROFILE_DEFAULTS = {
   weeklyGoal: 20,
   unrestrictedTarget: 60,
@@ -1309,8 +1309,6 @@ function monthlyFvfData() {
     supervisor,
     entries,
     totals: totalsForForm,
-    fieldworkType: $("fvfFieldworkType").value,
-    partialMonth: $("fvfPartialMonth").checked,
     applySignature: $("fvfApplySignature").checked,
     signatureIntent: $("fvfSignatureIntent").checked
   };
@@ -1337,13 +1335,13 @@ async function generateMonthlyFvf({ emailSupervisor = false } = {}) {
   }
   const pdfBytes = await buildMonthlyFvfPdf(data);
   const supervisorSlug = slugify(data.supervisor.name || "supervisor");
-  const filename = `monthly-fvf-${data.monthKeyValue}-${supervisorSlug}.pdf`;
+  const filename = `monthly-fvf-2027-${data.monthKeyValue}-${supervisorSlug}.pdf`;
   download(filename, pdfBytes, "application/pdf");
   if (emailSupervisor) openSupervisorEmail(data, filename);
 }
 
 async function buildMonthlyFvfPdf(data) {
-  const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+  const { PDFDocument, StandardFonts } = window.PDFLib;
   const templateBytes = await fetch(MONTHLY_FVF_TEMPLATE).then((response) => {
     if (!response.ok) throw new Error("Monthly FVF template could not be loaded.");
     return response.arrayBuffer();
@@ -1354,8 +1352,18 @@ async function buildMonthlyFvfPdf(data) {
   const form = pdfDoc.getForm();
   const t = data.totals;
   const today = formatDate(todayIso());
+  const independent = hoursAndMinutes(t.independent);
+  const supervised = hoursAndMinutes(t.supervised);
+  const total = hoursAndMinutes(t.total);
+  const observation = hoursAndMinutes(t.observationHours);
   const setText = (name, value) => form.getTextField(name).setText(String(value ?? ""));
-  const drawX = (x, y) => page.drawText("X", { x, y, size: 11, font, color: rgb(0.05, 0.08, 0.1) });
+  const setOptionalText = (name, value) => {
+    try {
+      setText(name, value);
+    } catch (_error) {
+      // Some BACB PDFs have duplicate or renamed field internals across versions.
+    }
+  };
   setText("TRAINEE_NAME", state.profile.name);
   setText("TRAINEE_BACB_ID", state.profile.bacbId);
   setText("TRAINEE_CERTIFICATE_MONTH/YEAR", data.monthYear);
@@ -1363,21 +1371,21 @@ async function buildMonthlyFvfPdf(data) {
   setText("TRAINEE_FIELDWORK_COUNTRY", state.profile.country);
   setText("RESPONSIBLE_SUPERVISOR_NAME", data.supervisor.name);
   setText("RESPONSIBLE_SUPERVISOR_BACB_ID", data.supervisor.bacbId);
-  setText("INDEPENDENT_HOURS", formatHours(t.independent));
-  setText("SUPERVISED_HOURS", formatHours(t.supervised));
-  setText("TOTAL_FIELDWORK", formatHours(t.total));
+  setText("Independent_Hours", independent.hours);
+  setText("Independent_Minutes", independent.minutes);
+  setText("Supervised_Hours", supervised.hours);
+  setText("Supervised_Minutes", supervised.minutes);
+  setText("Total_Fieldwork_Hours", total.hours);
+  setText("Total_Fieldwork_Minutes", total.minutes);
+  setText("Observation_Hours", observation.hours);
+  setOptionalText("Observation_Minutes", observation.minutes);
+  setOptionalText("Independent_Minutes 2", observation.minutes);
   setText("PERCENT_HOURS_SUPERVISED", `${percentFixed(t.supervised, t.total)}%`);
   if (data.applySignature) setText("TRAINEE_SIGNATURE_DATE", today);
-  if (data.fieldworkType === "standard") {
-    drawX(190, 553);
-  } else {
-    drawX(323, 553);
-  }
-  if (data.partialMonth) drawX(36, 380);
   form.updateFieldAppearances(font);
 
   if (data.applySignature) {
-    await drawSignature(pdfDoc, page, state.profile.signatureDataUrl, 132, 115, 300, 26);
+    await drawSignature(pdfDoc, page, state.profile.signatureDataUrl, 132, 146, 300, 14);
   }
 
   pdfDoc.setTitle(`Monthly Fieldwork Verification Form - ${data.monthYear}`);
@@ -1386,6 +1394,16 @@ async function buildMonthlyFvfPdf(data) {
   pdfDoc.setCreator("Fieldwork Flow");
   pdfDoc.setKeywords(["BACB", "Monthly FVF", "trainee signature"]);
   return await pdfDoc.save();
+}
+
+function hoursAndMinutes(value) {
+  const totalMinutes = Math.round(Number(value || 0) * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return {
+    hours: String(hours),
+    minutes: String(minutes).padStart(2, "0")
+  };
 }
 
 async function drawSignature(pdfDoc, page, dataUrl, x, y, maxWidth, maxHeight) {
