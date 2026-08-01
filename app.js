@@ -10,7 +10,6 @@ const CLOUD_PROFILE_DEFAULTS = {
 const FIELDWORK_REQUIREMENTS_2027 = {
   minMonthlyHours: 20,
   maxMonthlyHours: 160,
-  unrestrictedPct: 60,
   standard: {
     supervisionPct: 5,
     observationHours: 1
@@ -600,12 +599,6 @@ function evaluatePath(entries, type) {
       need: `${formatHours(Math.max(requiredObservationHours - t.observationHours, 0))} more client-observation hours`
     },
     {
-      key: "unrestricted",
-      label: "Unrestricted",
-      met: t.total > 0 && percent(t.unrestricted, t.total) >= FIELDWORK_REQUIREMENTS_2027.unrestrictedPct,
-      need: `${FIELDWORK_REQUIREMENTS_2027.unrestrictedPct}% unrestricted required`
-    },
-    {
       key: "individual",
       label: "Individual balance",
       met: t.supervised === 0 || t.groupSupervision <= t.individualSupervision,
@@ -821,6 +814,7 @@ function renderTotalHours() {
   $("totalIndependentHours").textContent = formatHours(allTotals.independent);
   $("totalSupervisedHours").textContent = formatHours(allTotals.supervised);
   $("totalUnrestrictedHours").textContent = formatHours(allTotals.unrestricted);
+  $("totalUnrestrictedPct").textContent = `${percent(allTotals.unrestricted, allTotals.total)}%`;
   $("totalContacts").textContent = String(allTotals.contacts);
   $("totalObservations").textContent = formatHours(allTotals.observationHours);
 
