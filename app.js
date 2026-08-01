@@ -26,6 +26,7 @@ const activityTypes = [
   { name: "Graphing Data", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Graphed session data and reviewed trends." },
   { name: "Data Analysis", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Analyzed data and considered program changes." },
   { name: "Program Writing / Revision", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Wrote or revised treatment goals, procedures, or materials." },
+  { name: "Program / Stimuli Development", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Developed programs, materials, stimuli, or treatment resources." },
   { name: "Assessment", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Completed assessment observation, measurement, or scoring." },
   { name: "Training", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Provided caregiver or staff training." },
   { name: "Supervisor Observation During Direct Therapy", category: "Restricted", experience: "Supervised", clientPresent: true, badge: "Supervised", prompt: "Supervisor observed direct implementation with client present." },
