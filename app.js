@@ -858,22 +858,6 @@ function totalHoursExportRows() {
       Concentrated: concentrated.yes ? "Yes" : "Not yet"
     };
   });
-  const all = totals(state.entries);
-  rows.push({
-    Year: "TOTAL",
-    Month: "TOTAL",
-    "# of Fieldwork Hours": formatHours(all.total),
-    "# of Independent Hours": formatHours(all.independent),
-    "# of Supervised Hours": formatHours(all.supervised),
-    "# of Unrestricted Hours": formatHours(all.unrestricted),
-    "# of Supervision Contacts": all.contacts,
-    "# of Client Observations": all.observations,
-    "# of Client Observation Hours": formatHours(all.observationHours),
-    "% of Fieldwork Supervised": `${percent(all.supervised, all.total)}%`,
-    "% of Group Supervision": `${percent(all.groupSupervision, all.supervised)}%`,
-    Standard: "",
-    Concentrated: ""
-  });
   return rows;
 }
 
@@ -1188,15 +1172,90 @@ function downloadCsvRows(rows, filename) {
 
 function exportExcel() {
   const entries = filteredEntries();
-  const rows = rowsForEntries(entries);
+  const detailRows = rowsForEntries(entries);
+  const worksheetRows = [
+    ...entriesSummaryRows(entries),
+    [],
+    ...objectRows(detailRows, entryExportHeaders())
+  ];
   const filename = `Fieldwork Documentation Spreadsheet ${entryDateFileLabel(entries)} - ${traineeFileLabel()}.xlsx`;
-  downloadXlsx(filename, "Entries", rows);
+  downloadXlsxWorksheet(filename, "Entries", worksheetRows, [0, 3]);
 }
 
 function exportTotalHoursExcel() {
   const rows = totalHoursExportRows();
+  const worksheetRows = [
+    ...totalHoursSummaryRows(),
+    [],
+    ...objectRows(rows, totalHoursExportHeaders())
+  ];
   const filename = `Fieldwork Total Hours Summary - ${traineeFileLabel()}.xlsx`;
-  downloadXlsx(filename, "Total Hours", rows);
+  downloadXlsxWorksheet(filename, "Total Hours", worksheetRows, [0, 3]);
+}
+
+function entriesSummaryRows(entries) {
+  const t = totals(entries);
+  const standard = evaluatePath(entries, "standard");
+  const concentrated = evaluatePath(entries, "concentrated");
+  return [
+    ["Trainee", "Date Range", "Total Hours", "Independent", "Supervised", "Unrestricted", "Supervision %", "Group %", "Client Obs Hours", "Standard", "Concentrated"],
+    [state.profile.name || "Trainee", entryDateFileLabel(entries), formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.unrestricted), `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours), standard.yes ? "Yes" : "Not yet", concentrated.yes ? "Yes" : "Not yet"]
+  ];
+}
+
+function totalHoursSummaryRows() {
+  const t = totals(state.entries);
+  return [
+    ["Trainee", "Total Fieldwork", "Independent", "Supervised", "Unrestricted", "Unrestricted %", "Supervision %", "Group %", "Client Obs Hours"],
+    [state.profile.name || "Trainee", formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.unrestricted), `${percent(t.unrestricted, t.total)}%`, `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours)]
+  ];
+}
+
+function objectRows(rows, headers) {
+  return [headers, ...rows.map((row) => headers.map((header) => row[header] ?? ""))];
+}
+
+function entryExportHeaders() {
+  return [
+    "Date",
+    "Start",
+    "End",
+    "Hours",
+    "Activity",
+    "Category",
+    "Experience",
+    "Supervision Type",
+    "Supervision Method",
+    "Supervision Start",
+    "Supervision End",
+    "Supervised Hours",
+    "Individual Supervision Hours",
+    "Group Supervision Hours",
+    "Independent Hours",
+    "Supervisor",
+    "Client Present",
+    "Supervisor-Client Observation",
+    "Setting",
+    "Notes"
+  ];
+}
+
+function totalHoursExportHeaders() {
+  return [
+    "Year",
+    "Month",
+    "# of Fieldwork Hours",
+    "# of Independent Hours",
+    "# of Supervised Hours",
+    "# of Unrestricted Hours",
+    "# of Supervision Contacts",
+    "# of Client Observations",
+    "# of Client Observation Hours",
+    "% of Fieldwork Supervised",
+    "% of Group Supervision",
+    "Standard",
+    "Concentrated"
+  ];
 }
 
 function traineeFileLabel() {
@@ -1368,6 +1427,10 @@ function percentFixed(part, total) {
 function downloadXlsx(filename, sheetName, rows) {
   const headers = Object.keys(rows[0] || { Empty: "" });
   const worksheetRows = [headers, ...rows.map((row) => headers.map((header) => row[header] ?? ""))];
+  downloadXlsxWorksheet(filename, sheetName, worksheetRows, [0]);
+}
+
+function downloadXlsxWorksheet(filename, sheetName, worksheetRows, boldRows = [0]) {
   const files = {
     "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -1398,22 +1461,24 @@ function downloadXlsx(filename, sheetName, rows) {
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
   <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
 </styleSheet>`,
-    "xl/worksheets/sheet1.xml": buildWorksheetXml(worksheetRows)
+    "xl/worksheets/sheet1.xml": buildWorksheetXml(worksheetRows, new Set(boldRows))
   };
   download(filename, buildZip(files), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 }
 
-function buildWorksheetXml(rows) {
-  const columnWidths = rows[0].map((_, index) => {
+function buildWorksheetXml(rows, boldRows = new Set([0])) {
+  const columnCount = Math.max(...rows.map((row) => row.length), 1);
+  const columnWidths = Array.from({ length: columnCount }, (_, index) => {
     const width = Math.min(Math.max(...rows.map((row) => String(row[index] ?? "").length), 10) + 2, 42);
     return `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
   }).join("");
   const rowXml = rows.map((row, rowIndex) => {
+    const style = boldRows.has(rowIndex) ? ' s="1"' : "";
     const cells = row.map((value, colIndex) => {
       const ref = `${columnName(colIndex + 1)}${rowIndex + 1}`;
       const numeric = typeof value === "number" || (value !== "" && !String(value).endsWith("%") && !Number.isNaN(Number(value)) && /^-?\d+(\.\d+)?$/.test(String(value)));
-      if (numeric) return `<c r="${ref}"${rowIndex === 0 ? ' s="1"' : ""}><v>${Number(value)}</v></c>`;
-      return `<c r="${ref}" t="inlineStr"${rowIndex === 0 ? ' s="1"' : ""}><is><t>${escapeXml(value)}</t></is></c>`;
+      if (numeric) return `<c r="${ref}"${style}><v>${Number(value)}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"${style}><is><t>${escapeXml(value)}</t></is></c>`;
     }).join("");
     return `<row r="${rowIndex + 1}">${cells}</row>`;
   }).join("");
