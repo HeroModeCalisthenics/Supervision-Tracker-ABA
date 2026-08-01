@@ -23,15 +23,16 @@ const FIELDWORK_REQUIREMENTS_2027 = {
 const activityTypes = [
   { name: "Direct Therapy", category: "Restricted", experience: "Independent", clientPresent: true, badge: "Restricted", prompt: "Implemented acquisition targets and behavior support plan." },
   { name: "Supervision Meeting", category: "Unrestricted", experience: "Supervised", clientPresent: false, badge: "Supervised", prompt: "Discussed cases, feedback, competencies, and next steps." },
-  { name: "Graphing Data", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Graphed session data and reviewed trends." },
-  { name: "Data Analysis", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Analyzed data and considered program changes." },
-  { name: "Program Writing / Revision", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Wrote or revised treatment goals, procedures, or materials." },
-  { name: "Program / Stimuli Development", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Developed programs, materials, stimuli, or treatment resources." },
-  { name: "Assessment", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Completed assessment observation, measurement, or scoring." },
-  { name: "Training", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Provided caregiver or staff training." },
   { name: "Supervisor Observation During Direct Therapy", category: "Restricted", experience: "Supervised", clientPresent: true, badge: "Supervised", prompt: "Supervisor observed direct implementation with client present." },
-  { name: "Baseline Observation / Measurement Design", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Designed measurement system or completed baseline observation." },
-  { name: "Literature Review", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Reviewed behavior-analytic literature related to programming." },
+  { name: "Data Graphing / Visual Analysis", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Graphed client data and reviewed trends or level, variability, and direction." },
+  { name: "Assessment / Intake", category: "Unrestricted", experience: "Independent", clientPresent: true, badge: "Unrestricted", prompt: "Completed intake, assessment observation, measurement, scoring, or assessment planning." },
+  { name: "Treatment Planning", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Reviewed client needs and planned behavior-analytic treatment priorities." },
+  { name: "Behavior Plan Writing", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Wrote or revised skill acquisition, behavior reduction, or support-plan content." },
+  { name: "Program / Stimuli Development", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Developed client-related programs, materials, stimuli, or treatment resources." },
+  { name: "Protocol Modification", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Modified procedures, targets, prompting, reinforcement, or data systems based on client progress." },
+  { name: "Caregiver / Staff Training", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Planned or delivered caregiver, staff, or technician training related to client services." },
+  { name: "Treatment Integrity / Feedback", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Reviewed implementation fidelity and prepared or delivered behavior-analytic feedback." },
+  { name: "Client-Related Literature Review", category: "Unrestricted", experience: "Independent", clientPresent: false, badge: "Unrestricted", prompt: "Reviewed behavior-analytic literature directly related to current client programming." },
   { name: "Other", category: "", experience: "", clientPresent: false, badge: "Review", prompt: "Describe the activity and classify it manually." }
 ];
 
