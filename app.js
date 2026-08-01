@@ -1198,16 +1198,16 @@ function entriesSummaryRows(entries) {
   const standard = evaluatePath(entries, "standard");
   const concentrated = evaluatePath(entries, "concentrated");
   return [
-    ["Trainee", "Date Range", "Total Hours", "Independent", "Supervised", "Unrestricted", "Supervision %", "Group %", "Client Obs Hours", "Standard", "Concentrated"],
-    [state.profile.name || "Trainee", entryDateFileLabel(entries), formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.unrestricted), `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours), standard.yes ? "Yes" : "Not yet", concentrated.yes ? "Yes" : "Not yet"]
+    ["Trainee", "Date Range", "Total Hours", "Independent", "Supervised", "Restricted", "Unrestricted", "Supervision %", "Group %", "Client Obs Hours", "Standard", "Concentrated"],
+    [state.profile.name || "Trainee", entryDateFileLabel(entries), formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.restricted), formatHours(t.unrestricted), `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours), standard.yes ? "Yes" : "Not yet", concentrated.yes ? "Yes" : "Not yet"]
   ];
 }
 
 function totalHoursSummaryRows() {
   const t = totals(state.entries);
   return [
-    ["Trainee", "Total Fieldwork", "Independent", "Supervised", "Unrestricted", "Unrestricted %", "Supervision %", "Group %", "Client Obs Hours"],
-    [state.profile.name || "Trainee", formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.unrestricted), `${percent(t.unrestricted, t.total)}%`, `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours)]
+    ["Trainee", "Total Fieldwork", "Independent", "Supervised", "Restricted", "Unrestricted", "Unrestricted %", "Supervision %", "Group %", "Client Obs Hours"],
+    [state.profile.name || "Trainee", formatHours(t.total), formatHours(t.independent), formatHours(t.supervised), formatHours(t.restricted), formatHours(t.unrestricted), `${percent(t.unrestricted, t.total)}%`, `${percent(t.supervised, t.total)}%`, `${percent(t.groupSupervision, t.supervised)}%`, formatHours(t.observationHours)]
   ];
 }
 
