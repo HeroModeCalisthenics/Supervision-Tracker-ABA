@@ -20,6 +20,8 @@ const FIELDWORK_REQUIREMENTS_2027 = {
   }
 };
 
+const LONG_SESSION_WARNING_HOURS = 4;
+
 const activityTypes = [
   { name: "Direct Therapy", category: "Restricted", experience: "Independent", clientPresent: true, badge: "Restricted", prompt: "Implemented acquisition targets and behavior support plan." },
   { name: "Supervision Meeting", category: "Unrestricted", experience: "Supervised", clientPresent: false, badge: "Supervised", prompt: "Discussed cases, feedback, competencies, and next steps." },
@@ -515,6 +517,15 @@ function collectEntry() {
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString()
   };
+}
+
+function confirmLongSessions(entries) {
+  const longEntries = entries.filter((entry) => Number(entry.durationHours || 0) > LONG_SESSION_WARNING_HOURS);
+  if (!longEntries.length) return true;
+  const details = longEntries
+    .map((entry) => `${entry.date} ${entry.startTime}-${entry.endTime} (${formatHours(entry.durationHours)} hours)`)
+    .join("\n");
+  return confirm(`This session is longer than ${LONG_SESSION_WARNING_HOURS} hours.\n\n${details}\n\nAre you sure you want to save it?`);
 }
 
 async function upsertEntry(entry) {
@@ -1099,6 +1110,7 @@ async function saveSplitSession() {
       updatedAt: new Date().toISOString()
     });
   });
+  if (!confirmLongSessions(newEntries)) return;
   state.entries.push(...newEntries);
   state.entries.sort((a, b) => `${b.date} ${b.startTime}`.localeCompare(`${a.date} ${a.startTime}`));
   saveState();
@@ -1675,7 +1687,9 @@ document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click",
 
 $("entryForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await upsertEntry(collectEntry());
+  const entry = collectEntry();
+  if (!confirmLongSessions([entry])) return;
+  await upsertEntry(entry);
   resetForm();
 });
 
